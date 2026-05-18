@@ -1,0 +1,9 @@
+name: raw
+steps:
+  resize: true
+  clahe: {enabled: false}
+  gaussian: {enabled: false}
+  anisotropic_diffusion: {enabled: false}
+  zscore_normalize: {enabled: false}
+augmentation: {rotation: 15, horizontal_flip: true, scale: 0.10}
+output_dir: results/preprocessed/raw

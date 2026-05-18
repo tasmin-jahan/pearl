@@ -1,0 +1,9 @@
+name: resnet50
+timm_name: resnet50
+input_size: 224
+pretrained: true
+num_classes: 2
+freeze_fraction: 0.60
+head:
+  hidden_dim: 256
+  dropout: 0.5

@@ -1,0 +1,9 @@
+name: clahe_gaussian
+steps:
+  resize: true
+  clahe: {enabled: true, clip_limit: 2.0, tile_size: [8, 8]}
+  gaussian: {enabled: true, sigma: 1.0}
+  anisotropic_diffusion: {enabled: false}
+  zscore_normalize: {enabled: false}
+augmentation: {rotation: 15, horizontal_flip: true, scale: 0.10}
+output_dir: results/preprocessed/clahe_gaussian

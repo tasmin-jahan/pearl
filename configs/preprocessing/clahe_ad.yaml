@@ -1,0 +1,9 @@
+name: clahe_ad
+steps:
+  resize: true
+  clahe: {enabled: true, clip_limit: 2.0, tile_size: [8, 8]}
+  gaussian: {enabled: false}
+  anisotropic_diffusion: {enabled: true, iterations: 20, kappa: 30, gamma: 0.1}
+  zscore_normalize: {enabled: false}
+augmentation: {rotation: 15, horizontal_flip: true, scale: 0.10}
+output_dir: results/preprocessed/clahe_ad

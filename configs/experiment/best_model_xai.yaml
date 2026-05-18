@@ -1,0 +1,20 @@
+name: best_model_xai
+mode: single
+model: efficientnet_b4
+preprocessing: full_ad
+training:
+  optimizer: adamw
+  lr: 1.0e-4
+  weight_decay: 1.0e-2
+  beta1: 0.9
+  beta2: 0.999
+  eps: 1.0e-8
+  scheduler: cosine_annealing
+  batch_size: 32
+  max_epochs: 100
+  early_stopping_patience: 20
+  monitor: val_auc
+  mc_dropout_passes: 50
+  ece_bins: 15
+seed: 42
+results_dir: results/
