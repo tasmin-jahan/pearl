@@ -1,3 +1,7 @@
 do not upload/
 *zip
 *jpg
+
+.venv
+__pycache__
+*pyc
