@@ -29,7 +29,7 @@ class PCOSDataset(Dataset):
         augment: Whether to apply augmentation (True only for training).
     """
 
-    CLASS_MAP = {"notinfected": 0, "infected": 1}
+    CLASS_MAP = {"noninfected": 0, "infected": 1}
 
     def __init__(
         self,
@@ -104,7 +104,7 @@ class PCOSDataset(Dataset):
         """
         n_total = len(self.samples)
         counts = self.get_class_counts()
-        n_class_0 = counts.get("notinfected", 1)
+        n_class_0 = counts.get("noninfected", 1)
         n_class_1 = counts.get("infected", 1)
 
         w0 = n_total / (2.0 * n_class_0)

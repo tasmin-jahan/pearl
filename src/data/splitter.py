@@ -29,7 +29,7 @@ def get_image_paths_and_labels(data_dir: str) -> Tuple[List[str], List[int]]:
     image_paths = []
     labels = []
 
-    class_map = {"notinfected": 0, "infected": 1}
+    class_map = {"noninfected": 0, "infected": 1}
 
     for class_name, label in class_map.items():
         class_dir = os.path.join(data_dir, class_name)

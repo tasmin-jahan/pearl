@@ -5,3 +5,4 @@ do not upload/
 .venv
 __pycache__
 *pyc
+*npy

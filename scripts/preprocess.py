@@ -78,7 +78,7 @@ def main():
     preprocessor = Preprocessor(config, input_size=args.input_size)
 
     # Process and save each split
-    class_names = {0: "notinfected", 1: "infected"}
+    class_names = {0: "noninfected", 1: "infected"}
     for split_name, paths, split_labels in [
         ("train", train_paths, train_labels),
         ("val", val_paths, val_labels),
