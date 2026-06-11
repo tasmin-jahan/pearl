@@ -49,7 +49,7 @@ Download the [Figshare PCOS Ultrasound Dataset](https://figshare.com/) and organ
 ```
 data/
   infected/        # PCOS images (6784)
-  notinfected/     # Non-PCOS images (5000)
+  noninfected/     # Non-PCOS images (5000)
 ```
 
 ## Usage
