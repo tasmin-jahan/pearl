@@ -44,6 +44,9 @@ def main():
     parser.add_argument("--entropy_threshold", type=float, default=0.35)
     parser.add_argument("--coverage_thresholds", type=float, nargs="+",
                         default=[1.0, 0.9, 0.8, 0.7, 0.6])
+    parser.add_argument("--run_dir", type=str, default=None,
+                        help="If set, write artifacts under <run_dir>/uncertainty/ "
+                             "instead of legacy results/uncertainty/<arch>__<prep>/.")
     args = parser.parse_args()
 
     model_config = load_config(args.model)
@@ -54,7 +57,10 @@ def main():
     arch = model_config["name"]
     preproc_name = preproc_config["name"]
 
-    out_dir = os.path.join("results", "uncertainty", f"{arch}__{preproc_name}")
+    if args.run_dir:
+        out_dir = os.path.join(args.run_dir, "uncertainty")
+    else:
+        out_dir = os.path.join("results", "uncertainty", f"{arch}__{preproc_name}")
     os.makedirs(out_dir, exist_ok=True)
 
     # Data

@@ -210,7 +210,63 @@ class ExperimentLogger:
 
 
 def make_run_dir(results_dir: str, arch: str, preprocessing: str) -> str:
-    """Generate a timestamped run directory path."""
+    """Generate a timestamped run directory path.
+
+    Legacy helper — kept for backward compatibility with any code that
+    still expects a timestamped ``results/runs/<arch>__<prep>__<ts>/``
+    tree. New code should prefer :func:`make_arch_dir`, which produces
+    a flat per-(prep, arch) folder.
+    """
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     run_name = f"{arch}__{preprocessing}__{timestamp}"
     return os.path.join(results_dir, "runs", run_name)
+
+
+def make_arch_dir(results_dir: str, prep: str, arch: str) -> str:
+    """Create and return the per-(prep, arch) artifact directory.
+
+    Layout::
+
+        results/checkpoints/<prep>/<arch>/
+            best.pt
+            best_e<N>.pt                # rolling-window checkpoints
+            config.yaml
+            epoch_log.csv
+            final_metrics.json
+            training_curve.png
+            roc_curve.{png,npz}
+            pr_curve.{png,npz}
+            confusion_matrix.png
+            test_predictions.npz
+            external_validation/        # populated by evaluate_external.py
+                pcosgen.json
+                pcosgen.csv
+            calibration/                # populated by run_calibration.py
+            uncertainty/                # populated by run_uncertainty.py
+            xai/                        # populated by run_xai.py
+
+    Every artifact for one trained model lands in this single folder,
+    so debugging/inspection is one tree-walk rather than three.
+
+    Args:
+        results_dir: Root results directory (e.g. ``"results/ablation/"``).
+        prep: Preprocessing name (e.g. ``"srad"``).
+        arch: Architecture name (e.g. ``"efficientnet_b0"``).
+
+    Returns:
+        Absolute path to the per-arch directory (created if missing).
+    """
+    arch_dir = os.path.join(results_dir, "checkpoints", prep, arch)
+    os.makedirs(arch_dir, exist_ok=True)
+    return arch_dir
+
+
+def external_validation_path(
+    arch_dir: str, dataset: str = "pcosgen", ext: str = "json"
+) -> str:
+    """Path under ``<arch_dir>/external_validation/`` for a given dataset/ext.
+
+    Does NOT create the parent directory — caller decides whether the
+    directory should exist (usually it will, since this is per-arch).
+    """
+    return os.path.join(arch_dir, "external_validation", f"{dataset}.{ext}")

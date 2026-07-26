@@ -106,25 +106,28 @@ python scripts/kfold_finalists.py \
 python scripts/run_calibration.py \
     --model configs/model/swin_tiny.yaml \
     --preprocessing configs/preprocessing/srad.yaml \
-    --checkpoint results/checkpoints/srad/swin_tiny.pt
+    --checkpoint results/checkpoints/srad/swin_tiny/best.pt \
+    --run_dir results/checkpoints/srad/swin_tiny
 
 python scripts/run_xai.py \
     --model configs/model/swin_tiny.yaml \
     --preprocessing configs/preprocessing/srad.yaml \
-    --checkpoint results/checkpoints/srad/swin_tiny.pt \
+    --checkpoint results/checkpoints/srad/swin_tiny/best.pt \
+    --run_dir results/checkpoints/srad/swin_tiny \
     --methods gradcam lrp shap --n_samples 20
 
 python scripts/run_uncertainty.py \
     --model configs/model/swin_tiny.yaml \
     --preprocessing configs/preprocessing/srad.yaml \
-    --checkpoint results/checkpoints/srad/swin_tiny.pt \
+    --checkpoint results/checkpoints/srad/swin_tiny/best.pt \
+    --run_dir results/checkpoints/srad/swin_tiny \
     --mc_passes 50
 
 # Step 7 — Ensemble calibration (two passes)
 python scripts/run_calibration_ensemble.py \
     --model_configs configs/model/swin_tiny.yaml configs/model/convnext_tiny.yaml \
-    --checkpoints results/checkpoints/srad/swin_tiny.pt \
-                  results/checkpoints/srad/convnext_tiny.pt \
+    --checkpoints results/checkpoints/srad/swin_tiny/best.pt \
+                  results/checkpoints/srad/convnext_tiny/best.pt \
     --preprocessing configs/preprocessing/srad.yaml
 ```
 
@@ -244,8 +247,8 @@ python scripts/train.py \
     --model configs/model/<arch>.yaml \
     --preprocessing configs/preprocessing/<name>.yaml \
     --experiment configs/experiment/<name>.yaml \
-    [--run_dir results/runs/<name>] \
-    [--resume results/runs/<run_id>/best.pt] \
+    [--run_dir results/checkpoints/<prep>/<arch>/] \
+    [--resume results/checkpoints/<prep>/<arch>/best.pt] \
     [--set <key.path>=<value> ...]
 ```
 
@@ -254,19 +257,26 @@ python scripts/train.py \
 | `--model` | str | **required** | Path to model config YAML. e.g. `configs/model/swin_tiny.yaml`. |
 | `--preprocessing` | str | **required** | Path to preprocessing config YAML. Must already be on disk from `scripts/preprocess.py`. |
 | `--experiment` | str | **required** | Path to experiment config YAML. e.g. `configs/experiment/best_model_xai.yaml`. Provides `training:` block (lr, epochs, etc.) and `seed:`. |
-| `--run_dir` | str | auto-generated | Override the run output directory. Default: `results/runs/<arch>__<preproc>__<timestamp>/`. |
+| `--run_dir` | str | auto-generated | Override the run output directory. Default: `results/<root>/checkpoints/<prep>/<arch>/`. |
 | `--resume` | str | `None` | Path to a checkpoint to resume from. Restores model + optimizer + scheduler + EMA + RNG. |
 | `--set` | str (repeatable) | `[]` | Inline config override. See [Dynamic CLI overrides](#dynamic-cli-overrides). Repeatable. |
 
-**Outputs** under `results/runs/<arch>__<preproc>__<timestamp>/`:
+**Outputs** under `results/<root>/checkpoints/<prep>/<arch>/` (one folder per model):
 
 ```
+best.pt                  # best-by-val-AUC checkpoint
+best_e<N>.pt             # rolling-window recent checkpoints (keep_last_n kept)
 config.yaml              # snapshot of merged config
 epoch_log.csv            # one row per epoch
 final_metrics.json       # test-set metrics
 training_curve.png       # loss + AUC plots
-best.pt                  # best-by-val-AUC checkpoint
-best_e<N>.pt             # rolling-window recent checkpoints (`<model>_e<epoch>.pt`)
+roc_curve.{png,npz}      # ROC curve + raw arrays
+pr_curve.{png,npz}       # precision-recall curve
+confusion_matrix.png     # test set confusion matrix
+test_predictions.npz     # (labels, probs, preds) for downstream analyses
+external_validation/     # populated by scripts/evaluate_external.py
+├── pcosgen.json
+└── pcosgen.csv
 ```
 
 **Examples**
@@ -290,7 +300,7 @@ python scripts/train.py \
     --model configs/model/swin_tiny.yaml \
     --preprocessing configs/preprocessing/srad.yaml \
     --experiment configs/experiment/best_model_xai.yaml \
-    --resume results/runs/swin_tiny__srad__20260518_143200/best.pt
+    --resume results/checkpoints/srad/swin_tiny/best.pt
 ```
 
 ---
@@ -452,7 +462,7 @@ recomputing metrics from a checkpoint outside the training flow.
 python scripts/evaluate.py \
     --model configs/model/<arch>.yaml \
     --preprocessing configs/preprocessing/<name>.yaml \
-    --checkpoint results/checkpoints/<arch>__<preproc>.pt \
+    --checkpoint results/checkpoints/<prep>/<arch>/best.pt \
     [--output results/eval/<arch>.json]
 ```
 
@@ -488,28 +498,44 @@ apples.
 
 ```bash
 python scripts/evaluate_external.py \
+    --run_dir results/checkpoints/srad/efficientnet_b0/ \
     --model configs/model/efficientnet_b0.yaml \
     --preprocessing configs/preprocessing/srad.yaml \
-    --checkpoint results/checkpoints/srad/efficientnet_b0.pt \
+    --checkpoint results/checkpoints/srad/efficientnet_b0/best.pt \
     --external_dir /home/farhan/my-projects/pearl/data_external/pcosgen \
-    --external_layout pcosgen \
-    --output results/external_validation/pcosgen_srad.json \
-    --predictions_csv results/external_validation/pcosgen_srad.csv
+    --external_layout pcosgen
+```
+
+With `--run_dir`, the output JSON and per-image CSV are auto-derived
+to `<run_dir>/external_validation/pcosgen.json` and `.csv`.
+
+To rebuild the top-level paper-ready summary CSV from all per-arch
+JSONs:
+
+```bash
+python scripts/evaluate_external.py --aggregate_summary \
+    --checkpoints_root results/ablation \
+    --summary_csv results/external_validation/summary.csv
 ```
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--model` | str | **required** | Path to model config YAML. |
-| `--preprocessing` | str | **required** | Path to preprocessing config YAML. Must match the preprocessing the model was trained with. |
-| `--checkpoint` | str | **required** | Path to `.pt` checkpoint. |
-| `--external_dir` | str | **required** | Root directory of the external dataset. |
+| `--model` | str | (req in inference mode) | Path to model config YAML. |
+| `--preprocessing` | str | (req in inference mode) | Path to preprocessing config YAML. Must match the preprocessing the model was trained with. |
+| `--checkpoint` | str | (req in inference mode) | Path to `.pt` checkpoint. |
+| `--run_dir` | str | `None` | Per-arch directory. If set, `--output` and `--predictions_csv` default to `<run_dir>/external_validation/<dataset_slug>.{json,csv}`. |
+| `--dataset_slug` | str | `pcosgen` | Filename slug for the dataset in `external_validation/`. |
+| `--external_dir` | str | (req in inference mode) | Root directory of the external dataset. |
 | `--external_layout` | str | `pcosgen` | One of `pcosgen`, `simple`, `flat`. |
 | `--split` | str | `test` | For `simple` layout: which subdir to use. |
 | `--batch_size` | int | `32` | Inference batch size. |
 | `--max_samples` | int | `None` | Optional cap on number of samples (debug only). |
 | `--seed` | int | `42` | Seed for any RNG in the loader. |
-| `--output` | str | `None` | If set, write metrics JSON to this path. |
-| `--predictions_csv` | str | `None` | If set, write per-image `(path, label, pred, prob_infected)` rows. |
+| `--output` | str | auto via `--run_dir` | Path to JSON output. |
+| `--predictions_csv` | str | auto via `--run_dir` | Path to per-image predictions CSV. |
+| `--aggregate_summary` | flag | `False` | Skip inference; rebuild top-level summary CSV from per-arch JSONs. |
+| `--checkpoints_root` | str | `results/` | Root results dir for `--aggregate_summary`. |
+| `--summary_csv` | str | `results/external_validation/summary.csv` | Output path for `--aggregate_summary`. |
 
 **Outputs**: prints all metrics including `n_samples`, `n_infected`,
 `n_healthy`. Optionally writes JSON if `--output` is set, and per-image
@@ -532,7 +558,8 @@ Per-model temperature scaling (Pass 1 of two-pass calibration).
 python scripts/run_calibration.py \
     --model configs/model/<arch>.yaml \
     --preprocessing configs/preprocessing/<name>.yaml \
-    --checkpoint results/checkpoints/<arch>__<preproc>.pt \
+    --checkpoint results/checkpoints/<prep>/<arch>/best.pt \
+    --run_dir results/checkpoints/<prep>/<arch>/ \
     [--n_bins 15]
 ```
 
@@ -542,8 +569,9 @@ python scripts/run_calibration.py \
 | `--preprocessing` | str | **required** | Path to preprocessing config YAML. |
 | `--checkpoint` | str | **required** | Path to the trained `.pt` checkpoint. |
 | `--n_bins` | int | `15` | Number of equal-width bins for ECE computation. |
+| `--run_dir` | str | `None` | Per-arch dir. If set, outputs land at `<run_dir>/calibration/`. Otherwise the legacy `results/calibration/<arch>__<preproc>/` is used. |
 
-**Outputs** under `results/calibration/<arch>__<preproc>/`:
+**Outputs** under `<run_dir>/calibration/` (when `--run_dir` is set):
 
 ```
 calibration_results.json    # ECE before/after, optimal T, NLL
@@ -565,7 +593,7 @@ Two-pass ensemble calibration: per-model T (Pass 1) + ensemble T
 ```bash
 python scripts/run_calibration_ensemble.py \
     --model_configs configs/model/a.yaml configs/model/b.yaml \
-    --checkpoints results/checkpoints/a.pt results/checkpoints/b.pt \
+    --checkpoints results/checkpoints/<prep>/a/best.pt results/checkpoints/<prep>/b/best.pt \
     --preprocessing configs/preprocessing/<name>.yaml \
     [--n_bins 15] \
     [--out_dir results/calibration_ensemble]
@@ -594,8 +622,8 @@ bin_data_pass2.csv
 ```bash
 python scripts/run_calibration_ensemble.py \
     --model_configs configs/model/swin_tiny.yaml configs/model/convnext_tiny.yaml \
-    --checkpoints results/checkpoints/srad/swin_tiny.pt \
-                  results/checkpoints/srad/convnext_tiny.pt \
+    --checkpoints results/checkpoints/srad/swin_tiny/best.pt \
+                  results/checkpoints/srad/convnext_tiny/best.pt \
     --preprocessing configs/preprocessing/srad.yaml
 ```
 
@@ -614,7 +642,8 @@ uncertain-correct, uncertain-wrong).
 python scripts/run_xai.py \
     --model configs/model/<arch>.yaml \
     --preprocessing configs/preprocessing/<name>.yaml \
-    --checkpoint results/checkpoints/<arch>__<preproc>.pt \
+    --checkpoint results/checkpoints/<prep>/<arch>/best.pt \
+    --run_dir results/checkpoints/<prep>/<arch>/ \
     [--methods gradcam lrp shap] \
     [--n_samples 20] \
     [--mc_passes 50]
@@ -628,8 +657,9 @@ python scripts/run_xai.py \
 | `--methods` | str list | `gradcam lrp shap` | Which XAI methods to run. Subset allowed: `--methods gradcam`. |
 | `--n_samples` | int | `20` | Total samples to explain (split 4 ways, so choose a multiple of 4). |
 | `--mc_passes` | int | `50` | Number of MC Dropout passes for entropy-based sample selection. |
+| `--run_dir` | str | `None` | Per-arch dir. If set, outputs land at `<run_dir>/xai/`. |
 
-**Outputs** under `results/xai/<arch>__<preproc>/`:
+**Outputs** under `<run_dir>/xai/` (when `--run_dir` is set):
 
 ```
 gradcam/sample_<id>_*.png
@@ -654,7 +684,8 @@ sweep.
 python scripts/run_uncertainty.py \
     --model configs/model/<arch>.yaml \
     --preprocessing configs/preprocessing/<name>.yaml \
-    --checkpoint results/checkpoints/<arch>__<preproc>.pt \
+    --checkpoint results/checkpoints/<prep>/<arch>/best.pt \
+    --run_dir results/checkpoints/<prep>/<arch>/ \
     [--mc_passes 50] \
     [--entropy_threshold 0.35] \
     [--coverage_thresholds 1.0 0.9 0.8 0.7 0.6]
@@ -668,8 +699,9 @@ python scripts/run_uncertainty.py \
 | `--mc_passes` | int | `50` | Number of MC Dropout forward passes for averaging. |
 | `--entropy_threshold` | float | `0.35` | Threshold (in nats) below which a sample is "auto-decided" (high confidence). |
 | `--coverage_thresholds` | float list | `1.0 0.9 0.8 0.7 0.6` | Coverage levels to evaluate on the referral curve. |
+| `--run_dir` | str | `None` | Per-arch dir. If set, outputs land at `<run_dir>/uncertainty/`. |
 
-**Outputs** under `results/uncertainty/<arch>__<preproc>/`:
+**Outputs** under `<run_dir>/uncertainty/` (when `--run_dir` is set):
 
 ```
 uncertainty_results.json
@@ -891,7 +923,7 @@ python scripts/train.py \
     --model configs/model/swin_tiny.yaml \
     --preprocessing configs/preprocessing/srad.yaml \
     --experiment configs/experiment/best_model_xai.yaml \
-    --resume results/runs/<run_id>/best.pt
+    --resume results/checkpoints/<prep>/<arch>/best.pt
 ```
 
 The trainer picks up at `epoch + 1`, restores RNG so the augmentation
@@ -933,40 +965,55 @@ catch integration breakage fast.
 
 ## Output directory layout
 
+Under v3, every artifact for one (prep, arch) combo lives in a single
+folder under `results/<root>/checkpoints/<prep>/<arch>/`. The top-level
+aggregated CSVs (sweep_matrix.csv, external_validation/summary.csv) are
+auto-generated by the relevant scripts.
+
 ```
 results/
-├── ablation/                                  # Phase 0 (18 runs)
-│   └── sweep_matrix.csv
-├── runs/                                       # Phase 1 single runs
-│   └── <arch>__<preproc>__<timestamp>/
-│       ├── config.yaml
-│       ├── epoch_log.csv
-│       ├── final_metrics.json
-│       ├── training_curve.png
-│       ├── best.pt
-│       └── <model>_e<N>.pt                    # rolling-window
-├── sweep_hpo/                                  # Phase 2 (per-arch HPO)
+├── preprocessed/                                # Phase 0 (preprocess)
+│   ├── srad/{train,val,test}/{infected,noninfected}/*.npy
+│   └── gauss/{train,val,test}/{infected,noninfected}/*.npy
+├── ablation/                                    # Phase 0 (sweep)
+│   ├── sweep_matrix.csv                         # auto-generated by sweep.py
+│   └── checkpoints/                             # per-arch artifacts
+│       ├── srad/<arch>/                         # one folder per model
+│       │   ├── best.pt
+│       │   ├── best_e<N>.pt
+│       │   ├── config.yaml
+│       │   ├── epoch_log.csv
+│       │   ├── final_metrics.json
+│       │   ├── training_curve.png
+│       │   ├── roc_curve.{png,npz}
+│       │   ├── pr_curve.{png,npz}
+│       │   ├── confusion_matrix.png
+│       │   ├── test_predictions.npz
+│       │   ├── calibration/                     # Phase 5 (run_calibration.py)
+│       │   ├── uncertainty/                     # Phase 6 (run_uncertainty.py)
+│       │   ├── xai/{gradcam,lrp,shap}/          # Phase 7 (run_xai.py)
+│       │   └── external_validation/             # Phase 8 (evaluate_external.py)
+│       │       ├── pcosgen.json
+│       │       └── pcosgen.csv
+│       └── gauss/<arch>/...same structure
+├── external_validation/
+│   └── summary.csv                              # auto-generated by
+│                                                 # evaluate_external.py --aggregate_summary
+├── sweep_hpo/                                   # Phase 2 (per-arch HPO)
 │   ├── summary.csv
 │   ├── finalists.csv
 │   └── <arch>/{best_params.yaml, all_trials.csv}
-├── kfold/                                      # Phase 3
+├── kfold/                                       # Phase 3
 │   ├── kfold_summary.csv
 │   └── <arch>/fold<N>/{best.pt, epoch_log.csv, ...}
-├── checkpoints/                                # shared checkpoint store
-├── calibration/<arch>__<preproc>/             # Phase 5 pass 1
-│   ├── calibration_results.json
-│   ├── reliability_diagram_before.png
-│   ├── reliability_diagram_after.png
-│   └── bin_data.csv
-├── calibration_ensemble/                      # Phase 5 pass 2
+├── calibration_ensemble/                       # Phase 5 pass 2
 │   ├── calibration_results.json
 │   ├── reliability_p1.png
 │   ├── reliability_p2.png
 │   ├── bin_data_pass1.csv
 │   └── bin_data_pass2.csv
-├── uncertainty/<arch>__<preproc>/             # Phase 6
-├── xai/<arch>__<preproc>/{gradcam,lrp,shap}/
-└── tuning/                                     # legacy single-arch tuning
+└── tuning/                                      # legacy single-arch tuning
 ```
 
-All naming uses `<arch>__<preproc>` as the canonical key.
+Naming convention: `<prep>/<arch>/` is the canonical key. Each per-arch
+folder is self-contained — debugging any model is a single tree walk.

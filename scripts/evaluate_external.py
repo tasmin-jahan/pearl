@@ -20,18 +20,29 @@ Supported external datasets:
         <dataset>/infected/*.jpg
         <dataset>/noninfected/*.jpg (or healthy/, normal/)
 
-Usage:
+Usage — inference on an external dataset:
+
     python scripts/evaluate_external.py \
+        --run_dir results/ablation/checkpoints/srad/efficientnet_b0/ \
         --model configs/model/efficientnet_b0.yaml \
         --preprocessing configs/preprocessing/srad.yaml \
-        --checkpoint results/checkpoints/srad/efficientnet_b0.pt \
+        --checkpoint results/ablation/checkpoints/srad/efficientnet_b0/best.pt \
         --external_dir data_external/pcosgen \
-        --external_layout pcosgen \
-        --output results/external_validation/srad__efficientnet_b0__pcosgen.json
+        --external_layout pcosgen
+
+    (With --run_dir, the output and predictions_csv default to
+     <run_dir>/external_validation/pcosgen.json and .csv respectively.)
+
+Usage — aggregate all per-arch outputs into the paper-ready summary:
+
+    python scripts/evaluate_external.py --aggregate_summary \
+        --checkpoints_root results/ablation \
+        --summary_csv results/external_validation/summary.csv
 """
 
 import argparse
 import csv
+import glob
 import json
 import os
 import sys
@@ -202,15 +213,87 @@ class _ExternalDataset(Dataset):
 # Main
 # =====================================================================
 
+def _aggregate_external_validation(checkpoints_root: str, output_path: str):
+    """Walk ``results/<root>/checkpoints/<prep>/<arch>/external_validation/``,
+    JSONs and write a single CSV summary at ``output_path``.
+
+    Replaces the manual aggregation block in todo.md step 7.
+    """
+    pattern = os.path.join(
+        checkpoints_root, "checkpoints", "*", "*", "external_validation", "*.json",
+    )
+    files = sorted(glob.glob(pattern))
+    if not files:
+        print(f"[Aggregate] No external_validation JSONs found at {pattern}")
+        return
+
+    rows = []
+    for fp in files:
+        # fp = .../checkpoints/<prep>/<arch>/external_validation/<dataset>.json
+        rel = fp[len(checkpoints_root):].strip("/")
+        parts = rel.split("/")
+        prep = parts[1]
+        arch = parts[2]
+        dataset = os.path.splitext(os.path.basename(fp))[0]
+        with open(fp) as f:
+            d = json.load(f)
+        rows.append({
+            "prep": prep,
+            "arch": arch,
+            "dataset": dataset,
+            "n_samples": d.get("n_samples"),
+            "auc": d.get("auc_roc", d.get("auc", None)),
+            "accuracy": d.get("accuracy", None),
+            "f1": d.get("f1", None),
+            "mcc": d.get("mcc", None),
+            "precision": d.get("precision", None),
+            "recall": d.get("recall", None),
+            "specificity": d.get("specificity", None),
+        })
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    fieldnames = [
+        "prep", "arch", "dataset", "n_samples",
+        "auc", "accuracy", "f1", "mcc",
+        "precision", "recall", "specificity",
+    ]
+    with open(output_path, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w.writeheader()
+        for r in rows:
+            w.writerow(r)
+    print(f"[Aggregate] Wrote {len(rows)} rows to {output_path}")
+
+
 def main():
-    parser = argparse.ArgumentParser(description="External-validation evaluator")
-    parser.add_argument("--model", type=str, required=True,
+    parser = argparse.ArgumentParser(
+        description="External-validation evaluator",
+        epilog=(
+            "Two modes:\n"
+            "  1. Standard: run inference on an external dataset and write\n"
+            "     metrics + per-image preds. Use --checkpoint to load a model.\n"
+            "     If --run_dir is set, --output / --predictions_csv default to\n"
+            "     <run_dir>/external_validation/<dataset_slug>.{json,csv}.\n"
+            "  2. --aggregate_summary: glob results/<root>/checkpoints/<prep>/"
+            "<arch>/external_validation/*.json and write a single summary CSV."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--model", type=str, default=None,
                         help="Path to model architecture YAML config.")
-    parser.add_argument("--preprocessing", type=str, required=True,
+    parser.add_argument("--preprocessing", type=str, default=None,
                         help="Path to preprocessing YAML config.")
-    parser.add_argument("--checkpoint", type=str, required=True,
+    parser.add_argument("--checkpoint", type=str, default=None,
                         help="Path to trained model checkpoint.")
-    parser.add_argument("--external_dir", type=str, required=True,
+    parser.add_argument("--run_dir", type=str, default=None,
+                        help="Per-arch run directory (e.g. "
+                             "results/ablation/checkpoints/srad/efficientnet_b0/). "
+                             "If set, --output and --predictions_csv default to "
+                             "<run_dir>/external_validation/<dataset_slug>.{json,csv}.")
+    parser.add_argument("--dataset_slug", type=str, default="pcosgen",
+                        help="Filename slug for the dataset in external_validation/ "
+                             "(default 'pcosgen'). Used with --run_dir auto-defaulting.")
+    parser.add_argument("--external_dir", type=str, default=None,
                         help="Root directory of the external dataset.")
     parser.add_argument("--layout", type=str, default="pcosgen",
                         choices=["pcosgen", "simple", "flat"],
@@ -222,10 +305,45 @@ def main():
                         help="Optional cap on the number of samples (debug).")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output", type=str, default=None,
-                        help="Path to JSON output (metrics).")
+                        help="Path to JSON output (metrics). Defaults to "
+                             "<run_dir>/external_validation/<dataset_slug>.json "
+                             "when --run_dir is set.")
     parser.add_argument("--predictions_csv", type=str, default=None,
-                        help="Path to write per-image predictions CSV.")
+                        help="Path to write per-image predictions CSV. Defaults "
+                             "to <run_dir>/external_validation/<dataset_slug>.csv "
+                             "when --run_dir is set.")
+    parser.add_argument("--aggregate_summary", action="store_true",
+                        help="Skip inference; rebuild the top-level aggregated "
+                             "summary CSV from existing per-arch JSONs.")
+    parser.add_argument("--checkpoints_root", type=str, default="results/",
+                        help="Root results dir for --aggregate_summary "
+                             "(default 'results/').")
+    parser.add_argument("--summary_csv", type=str,
+                        default="results/external_validation/summary.csv",
+                        help="Output path for --aggregate_summary.")
     args = parser.parse_args()
+
+    # ---- Aggregate mode (separate execution path) ----
+    if args.aggregate_summary:
+        _aggregate_external_validation(args.checkpoints_root, args.summary_csv)
+        return
+
+    # ---- Standard mode requires these ----
+    if not (args.model and args.preprocessing and args.checkpoint
+            and args.external_dir):
+        parser.error(
+            "Standard mode requires --model, --preprocessing, --checkpoint, "
+            "--external_dir (or use --aggregate_summary)."
+        )
+
+    # ---- Apply --run_dir auto-defaults for output paths ----
+    if args.run_dir:
+        ext_dir = os.path.join(args.run_dir, "external_validation")
+        os.makedirs(ext_dir, exist_ok=True)
+        if args.output is None:
+            args.output = os.path.join(ext_dir, f"{args.dataset_slug}.json")
+        if args.predictions_csv is None:
+            args.predictions_csv = os.path.join(ext_dir, f"{args.dataset_slug}.csv")
 
     set_seed(args.seed)
 

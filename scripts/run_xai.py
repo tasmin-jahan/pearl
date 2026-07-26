@@ -86,6 +86,9 @@ def main():
     parser.add_argument("--methods", type=str, nargs="+", default=["gradcam", "lrp", "shap"])
     parser.add_argument("--n_samples", type=int, default=20)
     parser.add_argument("--mc_passes", type=int, default=50)
+    parser.add_argument("--run_dir", type=str, default=None,
+                        help="If set, write artifacts under <run_dir>/xai/ "
+                             "instead of legacy results/xai/<arch>__<prep>/.")
     args = parser.parse_args()
 
     model_config = load_config(args.model)
@@ -96,7 +99,10 @@ def main():
     arch = model_config["name"]
     preproc_name = preproc_config["name"]
 
-    out_dir = os.path.join("results", "xai", f"{arch}__{preproc_name}")
+    if args.run_dir:
+        out_dir = os.path.join(args.run_dir, "xai")
+    else:
+        out_dir = os.path.join("results", "xai", f"{arch}__{preproc_name}")
     os.makedirs(out_dir, exist_ok=True)
 
     # Data

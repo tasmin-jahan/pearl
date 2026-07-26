@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.utils.config import load_config
 from src.utils.seed import set_seed
-from src.utils.logging import ExperimentLogger, make_run_dir
+from src.utils.logging import ExperimentLogger, make_arch_dir
 from src.data.dataloader import build_dataloaders
 from src.model.builder import build_model
 from src.training.losses import build_weighted_loss
@@ -105,7 +105,7 @@ def _make_summary_table(results: list) -> "RichTable":
             f"{sens:.4f}" if not _isnan(sens) else "—",
             f"{spec:.4f}" if not _isnan(spec) else "—",
             f"{m.get('total_train_time_sec', 0):.0f}",
-            f"{m.get('preprocessing', '?')}/{m.get('arch', '?')}.pt",
+            f"{m.get('preprocessing', '?')}/{m.get('arch', '?')}/best.pt",
         )
 
     return tbl
@@ -215,15 +215,16 @@ def main():
             run_started_at = time.time()
             set_seed(seed)
 
-            # Run directory
-            run_dir = make_run_dir(results_dir, model_name, preproc_name)
+            # Per-(prep, arch) directory — holds all artifacts for this run.
+            arch_dir = make_arch_dir(results_dir, preproc_name, model_name)
+            checkpoint_path = os.path.join(arch_dir, "best.pt")
             full_config = {
                 "model": model_config,
                 "preprocessing": preproc_config,
                 "experiment": experiment_config,
                 "seed": seed,
             }
-            logger = ExperimentLogger(run_dir, full_config)
+            logger = ExperimentLogger(arch_dir, full_config)
 
             # Data
             input_size = model_config.get("input_size", 224)
@@ -240,10 +241,6 @@ def main():
             # Loss
             class_weights = train_loader.dataset.get_class_weights()
             criterion = build_weighted_loss(class_weights, device=device)
-
-            # Checkpoint path: <results>/checkpoints/<prep>/<model>.pt
-            checkpoint_dir = os.path.join(results_dir, "checkpoints", preproc_name)
-            checkpoint_path = os.path.join(checkpoint_dir, f"{model_name}.pt")
 
             # Train
             trainer = Trainer(

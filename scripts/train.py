@@ -8,7 +8,7 @@ Usage:
         --preprocessing configs/preprocessing/srad.yaml \
         --experiment configs/experiment/best_model_xai.yaml \
         --set training.lr=5e-4 training.batch_size=16 \
-        --run_dir results/runs/swin_tiny__srad__20260518  # optional
+        --run_dir results/ablation/checkpoints/srad/swin_tiny  # optional
 
 Dynamic overrides: ``--set <dotted.key.path>=<value>`` (repeatable).
 """
@@ -24,7 +24,7 @@ from src.utils.config import (
     parse_overrides, apply_overrides,
 )
 from src.utils.seed import set_seed
-from src.utils.logging import ExperimentLogger, make_run_dir
+from src.utils.logging import ExperimentLogger, make_arch_dir, make_run_dir
 from src.data.dataloader import build_dataloaders
 from src.model.builder import build_model
 from src.training.losses import build_weighted_loss
@@ -70,11 +70,15 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"[Train] Device: {device}")
 
-    # Run directory
+    # Per-(prep, arch) directory — holds all artifacts for this run.
     arch = model_config["name"]
     preproc_name = preproc_config["name"]
     results_dir = experiment_config.get("results_dir", "results/")
-    run_dir = args.run_dir or make_run_dir(results_dir, arch, preproc_name)
+    arch_dir = make_arch_dir(results_dir, preproc_name, arch)
+
+    # --run_dir override (for resume): can point at either the per-arch
+    # directory or a legacy timestamped runs/ directory.
+    run_dir = args.run_dir or arch_dir
 
     # Merged config for logging
     full_config = {
@@ -103,10 +107,8 @@ def main():
     class_weights = train_loader.dataset.get_class_weights()
     criterion = build_weighted_loss(class_weights, device=device)
 
-    # Checkpoint path: <results>/checkpoints/<prep>/<arch>.pt
-    checkpoint_dir = os.path.join(results_dir, "checkpoints", preproc_name)
-    os.makedirs(checkpoint_dir, exist_ok=True)
-    checkpoint_path = os.path.join(checkpoint_dir, f"{arch}.pt")
+    # Checkpoint path lives inside the per-arch directory.
+    checkpoint_path = os.path.join(arch_dir, "best.pt")
 
     # Train (with optional resume)
     trainer = Trainer(

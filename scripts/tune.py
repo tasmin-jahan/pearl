@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.utils.config import load_config
 from src.utils.seed import set_seed
+from src.utils.logging import make_arch_dir
 from src.training.tuner import make_objective
 from src.model.builder import build_model
 from src.training.checkpoint import save_checkpoint
@@ -110,13 +111,16 @@ def main():
     best_cfg["head"]["dropout"] = study.best_trial.params["dropout"]
 
     best_model = build_model(best_cfg)
-    ckpt_dir = os.path.join(
-        os.path.dirname(results_dir.rstrip("/")),
-        "checkpoints",
-        preproc_name,
+    # Per-(prep, arch) directory — derived by stripping the trailing
+    # /<subdir> from results_dir (e.g. "results/tuning/" →
+    # "results/tuning" → "results"). Plain split keeps it explicit.
+    root_results_dir = (
+        results_dir.rstrip("/").rsplit("/", 1)[0]
+        if results_dir.count("/") > 0
+        else results_dir
     )
-    os.makedirs(ckpt_dir, exist_ok=True)
-    ckpt_path = os.path.join(ckpt_dir, f"{model_name}__tuned.pt")
+    arch_dir = make_arch_dir(root_results_dir, preproc_name, model_name)
+    ckpt_path = os.path.join(arch_dir, f"{model_name}__tuned.pt")
     save_checkpoint(best_model, torch.optim.AdamW(best_model.parameters()),
                     0, study.best_trial.value, ckpt_path)
 

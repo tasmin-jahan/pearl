@@ -37,6 +37,9 @@ def main():
     parser.add_argument("--preprocessing", type=str, required=True)
     parser.add_argument("--checkpoint", type=str, required=True)
     parser.add_argument("--n_bins", type=int, default=15)
+    parser.add_argument("--run_dir", type=str, default=None,
+                        help="If set, write artifacts under <run_dir>/calibration/ "
+                             "instead of legacy results/calibration/<arch>__<prep>/.")
     args = parser.parse_args()
 
     model_config = load_config(args.model)
@@ -47,8 +50,11 @@ def main():
     arch = model_config["name"]
     preproc_name = preproc_config["name"]
 
-    # Output directory
-    out_dir = os.path.join("results", "calibration", f"{arch}__{preproc_name}")
+    # Output directory — colocate with the model if --run_dir is given.
+    if args.run_dir:
+        out_dir = os.path.join(args.run_dir, "calibration")
+    else:
+        out_dir = os.path.join("results", "calibration", f"{arch}__{preproc_name}")
     os.makedirs(out_dir, exist_ok=True)
 
     # Data
