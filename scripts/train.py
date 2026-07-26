@@ -4,10 +4,13 @@ CLI entrypoint for a single training run.
 
 Usage:
     python scripts/train.py \
-        --model configs/model/efficientnet_b4.yaml \
-        --preprocessing configs/preprocessing/full_ad.yaml \
-        --experiment configs/experiment/sweep_all_54.yaml \
-        --run_dir results/runs/efficientnet_b4__full_ad__20260518  # optional
+        --model configs/model/swin_tiny.yaml \
+        --preprocessing configs/preprocessing/srad_clahe.yaml \
+        --experiment configs/experiment/best_model_xai.yaml \
+        --set training.lr=5e-4 training.batch_size=16 \
+        --run_dir results/runs/swin_tiny__srad_clahe__20260518  # optional
+
+Dynamic overrides: ``--set <dotted.key.path>=<value>`` (repeatable).
 """
 
 import argparse
@@ -16,7 +19,10 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.utils.config import load_config, load_experiment_config
+from src.utils.config import (
+    load_config, load_experiment_config,
+    parse_overrides, apply_overrides,
+)
 from src.utils.seed import set_seed
 from src.utils.logging import ExperimentLogger, make_run_dir
 from src.data.dataloader import build_dataloaders
@@ -31,13 +37,29 @@ def main():
     parser.add_argument("--preprocessing", type=str, required=True, help="Preprocessing config YAML")
     parser.add_argument("--experiment", type=str, required=True, help="Experiment config YAML")
     parser.add_argument("--run_dir", type=str, default=None, help="Override run directory")
+    parser.add_argument(
+        "--set", dest="overrides", action="append", default=[],
+        help="Config override, e.g. --set training.lr=5e-4 (repeatable)",
+    )
+    parser.add_argument(
+        "--resume", type=str, default=None,
+        help="Path to checkpoint to resume from",
+    )
     args = parser.parse_args()
 
     # Load configs
-    model_config = load_config(args.model)
-    preproc_config = load_config(args.preprocessing)
-    experiment_config = load_config(args.experiment)
-    training_config = experiment_config.get("training", {})
+    full = load_experiment_config(args.model, args.preprocessing, args.experiment)
+    experiment_config = full["experiment"]
+    model_config = full["model"]
+    preproc_config = full["preprocessing"]
+    training_config = full.get("training", experiment_config.get("training", {}))
+
+    # Dynamic overrides
+    if args.overrides:
+        overrides = parse_overrides(args.overrides)
+        training_config = apply_overrides(training_config, overrides)
+        experiment_config = apply_overrides(experiment_config, overrides)
+        model_config = apply_overrides(model_config, overrides)
 
     # Seed
     seed = experiment_config.get("seed", 42)
@@ -84,7 +106,7 @@ def main():
         results_dir, "checkpoints", f"{arch}__{preproc_name}.pt"
     )
 
-    # Train
+    # Train (with optional resume)
     trainer = Trainer(
         model=model,
         train_loader=train_loader,
@@ -97,7 +119,7 @@ def main():
         checkpoint_path=checkpoint_path,
     )
 
-    final_metrics = trainer.train()
+    final_metrics = trainer.train(resume_from=args.resume)
 
     # Add metadata
     final_metrics["arch"] = arch

@@ -1,13 +1,22 @@
-name: tune_best_model
-# v3: tuning is now per-architecture (Phase 6.1) on the entire 9-model
-# roster. This config tunes one specific architecture; for the full
-# sweep use tune_per_arch.yaml.
-model: swin_tiny
-preprocessing: srad_clahe
-n_trials: 50
+name: tune_per_arch
+# v3 Phase 6.1: a single full Optuna sweep across all 9 architectures.
+# This is "sweep All-9" — not a single-model tuning.
+mode: sweep_tune
+models:
+  - resnet50
+  - resnet101
+  - densenet121
+  - densenet169
+  - efficientnet_b0
+  - convnext_tiny
+  - mobilenetv3_large
+  - vit_base
+  - swin_tiny
+preprocessing: srad_clahe  # winning preprocessing only (Phase 0.4)
+n_trials_per_arch: 20       # per-architecture trial budget
+top_k_finalists: 3          # only top-k proceed to k-fold (Phase 6.2/3)
 direction: maximize
 metric: val_auc
-sampler: tpe
 pruner: median
 pruner_warmup_steps: 5
 
@@ -31,7 +40,7 @@ search_space:
     type: categorical
     choices: [16, 32, 64]
 
-# Fixed (not tuned):
+# Fixed:
 max_epochs: 100
 early_stopping_patience: 20
 warmup_epochs: 2
@@ -42,4 +51,4 @@ channels_last: true
 grad_clip_norm: 1.0
 ema: true
 seed: 42
-results_dir: results/tuning/
+results_dir: results/sweep_hpo/

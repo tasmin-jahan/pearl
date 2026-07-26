@@ -1,5 +1,5 @@
-name: vgg16
-timm_name: vgg16
+name: vit_base
+timm_name: vit_base_patch16_224
 input_size: 224
 pretrained: true
 num_classes: 2

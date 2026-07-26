@@ -46,7 +46,8 @@ def build_model(model_config: dict) -> nn.Module:
 
     # Attach custom classification head
     head_config = model_config.get("head", {"hidden_dim": 256, "dropout": 0.5})
-    head = ClassificationHead(in_features, head_config)
+    num_classes = model_config.get("num_classes", 2)
+    head = ClassificationHead(in_features, head_config, num_classes=num_classes)
 
     model = _ModelWithHead(backbone, head)
 

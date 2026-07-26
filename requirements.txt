@@ -49,3 +49,7 @@ matplotlib==3.10.9
 
 # --- Hyperparameter tuning ---
 optuna==4.9.0
+
+# --- Dev / testing ---
+tqdm==4.67.1
+pytest==9.0.1

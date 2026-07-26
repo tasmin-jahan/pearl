@@ -1,12 +1,11 @@
 """
 Experiment logger: CSV epoch logging, JSON final metrics, and training curve plots.
 
-Every training run gets its own run directory containing:
-  - config.yaml         (snapshot of exact config used)
-  - epoch_log.csv       (one row per epoch)
-  - final_metrics.json  (test-set metrics after training)
-  - training_curve.png  (loss + AUC curves)
-  - best_checkpoint.pt  (saved externally by checkpoint module)
+v3 features:
+  - Dual-tqdm progress bars (validation + total epoch elapsed)
+  - Safe logging: append-mode CSV on resume (not overwrite), so a
+    resumed run continues the existing epoch_log.csv.
+  - tqdm.write() everywhere to avoid breaking the progress bar.
 """
 
 import csv
@@ -42,23 +41,43 @@ class ExperimentLogger:
     Args:
         run_dir: Path to the run directory. Created if it doesn't exist.
         config: Full merged config dict; saved as config.yaml snapshot.
+        resume: If True, append to existing epoch_log.csv instead of
+            overwriting (used when resuming a checkpoint).
     """
 
-    def __init__(self, run_dir: str, config: dict):
+    def __init__(self, run_dir: str, config: dict, resume: bool = False):
         self.run_dir = run_dir
         os.makedirs(run_dir, exist_ok=True)
 
         # Save config snapshot for exact reproducibility
-        save_config(config, os.path.join(run_dir, "config.yaml"))
+        if not resume:
+            save_config(config, os.path.join(run_dir, "config.yaml"))
 
-        # Open epoch log CSV
         self._csv_path = os.path.join(run_dir, "epoch_log.csv")
-        self._csv_file = open(self._csv_path, "w", newline="")
-        self._csv_writer = csv.writer(self._csv_file)
-        self._csv_writer.writerow(EPOCH_LOG_HEADER)
-        self._csv_file.flush()
+        if resume and os.path.isfile(self._csv_path):
+            # Append mode — preserve past epochs
+            self._csv_file = open(self._csv_path, "a", newline="")
+            self._csv_writer = csv.writer(self._csv_file)
+            self._start_epoch = self._get_max_epoch() + 1
+        else:
+            self._csv_file = open(self._csv_path, "w", newline="")
+            self._csv_writer = csv.writer(self._csv_file)
+            self._csv_writer.writerow(EPOCH_LOG_HEADER)
+            self._csv_file.flush()
+            self._start_epoch = 1
 
-        print(f"[Logger] Run directory: {run_dir}")
+        print(f"[Logger] Run directory: {run_dir} (resume={resume})")
+
+    def _get_max_epoch(self) -> int:
+        if not os.path.isfile(self._csv_path):
+            return 0
+        try:
+            df = pd.read_csv(self._csv_path)
+            if "epoch" in df.columns and not df.empty:
+                return int(df["epoch"].max())
+        except Exception:
+            return 0
+        return 0
 
     # ------------------------------------------------------------------
     # Epoch-level logging
@@ -76,20 +95,7 @@ class ExperimentLogger:
         lr: float,
         epoch_time: float,
     ) -> None:
-        """Append one row to epoch_log.csv and print to console.
-
-        Args:
-            epoch: Current epoch number (1-indexed).
-            train_loss: Training loss for the epoch.
-            val_loss: Validation loss for the epoch.
-            train_acc: Training accuracy.
-            val_acc: Validation accuracy.
-            val_auc: Validation AUC-ROC.
-            val_f1: Validation F1 score.
-            val_mcc: Validation MCC.
-            lr: Current learning rate.
-            epoch_time: Wall-clock time for the epoch in seconds.
-        """
+        """Append one row to epoch_log.csv and print (using tqdm.write if active)."""
         row = [
             epoch,
             f"{train_loss:.6f}",
@@ -105,22 +111,24 @@ class ExperimentLogger:
         self._csv_writer.writerow(row)
         self._csv_file.flush()
 
-        print(
+        line = (
             f"  Epoch {epoch:>3d} | "
             f"train_loss={train_loss:.4f}  val_loss={val_loss:.4f} | "
             f"val_acc={val_acc:.4f}  val_auc={val_auc:.4f}  val_f1={val_f1:.4f} | "
             f"lr={lr:.2e}  time={epoch_time:.1f}s"
         )
+        # tqdm.write avoids corrupting progress bars; falls back to print if not active
+        try:
+            from tqdm import tqdm as _tqdm
+            _tqdm.write(line)
+        except ImportError:
+            print(line)
 
     # ------------------------------------------------------------------
     # Final metrics
     # ------------------------------------------------------------------
     def log_final_metrics(self, metrics: dict) -> None:
-        """Write final_metrics.json with test-set results.
-
-        Args:
-            metrics: Dictionary of metric name → value.
-        """
+        """Write final_metrics.json with test-set results."""
         path = os.path.join(self.run_dir, "final_metrics.json")
         with open(path, "w") as f:
             json.dump(metrics, f, indent=2)
@@ -130,13 +138,10 @@ class ExperimentLogger:
     # Training curve plots
     # ------------------------------------------------------------------
     def plot_training_curves(self) -> None:
-        """Read epoch_log.csv and produce training_curve.png.
-
-        Two subplots:
-          1. Train + Val loss over epochs
-          2. Val AUC over epochs
-        Best epoch marked with a vertical dashed line.
-        """
+        """Read epoch_log.csv and produce training_curve.png."""
+        if not os.path.isfile(self._csv_path):
+            print("[Logger] No epoch_log.csv to plot.")
+            return
         df = pd.read_csv(self._csv_path)
         if df.empty:
             print("[Logger] No data to plot.")
@@ -146,21 +151,22 @@ class ExperimentLogger:
 
         fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-        # --- Subplot 1: Loss curves ---
         ax = axes[0]
         ax.plot(df["epoch"], df["train_loss"], label="Train Loss", linewidth=1.5)
         ax.plot(df["epoch"], df["val_loss"], label="Val Loss", linewidth=1.5)
-        ax.axvline(best_epoch, color="grey", linestyle="--", alpha=0.7, label=f"Best epoch ({best_epoch})")
+        ax.axvline(best_epoch, color="grey", linestyle="--", alpha=0.7,
+                   label=f"Best epoch ({best_epoch})")
         ax.set_xlabel("Epoch")
         ax.set_ylabel("Loss")
         ax.set_title("Training & Validation Loss")
         ax.legend()
         ax.grid(True, alpha=0.3)
 
-        # --- Subplot 2: AUC curve ---
         ax = axes[1]
-        ax.plot(df["epoch"], df["val_auc"], label="Val AUC", linewidth=1.5, color="tab:green")
-        ax.axvline(best_epoch, color="grey", linestyle="--", alpha=0.7, label=f"Best epoch ({best_epoch})")
+        ax.plot(df["epoch"], df["val_auc"], label="Val AUC",
+                linewidth=1.5, color="tab:green")
+        ax.axvline(best_epoch, color="grey", linestyle="--", alpha=0.7,
+                   label=f"Best epoch ({best_epoch})")
         ax.set_xlabel("Epoch")
         ax.set_ylabel("AUC-ROC")
         ax.set_title("Validation AUC-ROC")
@@ -177,23 +183,13 @@ class ExperimentLogger:
     # Cleanup
     # ------------------------------------------------------------------
     def close(self) -> None:
-        """Flush and close file handles."""
         if self._csv_file and not self._csv_file.closed:
             self._csv_file.flush()
             self._csv_file.close()
 
 
 def make_run_dir(results_dir: str, arch: str, preprocessing: str) -> str:
-    """Generate a timestamped run directory path.
-
-    Args:
-        results_dir: Base results directory (e.g. 'results/').
-        arch: Architecture name (e.g. 'efficientnet_b4').
-        preprocessing: Preprocessing config name (e.g. 'full_ad').
-
-    Returns:
-        Path string like 'results/runs/efficientnet_b4__full_ad__20260518_143200'.
-    """
+    """Generate a timestamped run directory path."""
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     run_name = f"{arch}__{preprocessing}__{timestamp}"
     return os.path.join(results_dir, "runs", run_name)

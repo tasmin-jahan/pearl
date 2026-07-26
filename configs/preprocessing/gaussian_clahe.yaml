@@ -1,0 +1,15 @@
+name: gaussian_clahe
+# v3 Phase 0.4 ablation arm: CLAHE + Gaussian + Z-score (NOT SRAD).
+# SRAD vs Gaussian is the only axis the ablation tests.
+steps:
+  resize: true
+  clahe: {enabled: true, clip_limit: 2.0, tile_size: [8, 8]}
+  gaussian: {enabled: true, sigma: 1.0}
+  srad: {enabled: false}
+  anisotropic_diffusion: {enabled: false}
+  zscore_normalize: {enabled: true}
+augmentation:
+  rotation: 15
+  horizontal_flip: true
+  scale: 0.10
+output_dir: results/preprocessed/gaussian_clahe

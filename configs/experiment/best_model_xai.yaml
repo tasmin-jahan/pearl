@@ -1,7 +1,9 @@
 name: best_model_xai
 mode: single
-model: efficientnet_b4
-preprocessing: full_ad
+# v3: best model slot is filled post-sweep; swin_tiny is a placeholder
+# default that you overwrite via --model once the sweep winners are known.
+model: swin_tiny
+preprocessing: srad_clahe
 training:
   optimizer: adamw
   lr: 1.0e-4
@@ -13,8 +15,15 @@ training:
   batch_size: 32
   max_epochs: 100
   early_stopping_patience: 20
+  warmup_epochs: 2
+  freeze_epochs: 1
   monitor: val_auc
   mc_dropout_passes: 50
   ece_bins: 15
+  bf16: true
+  channels_last: true
+  grad_clip_norm: 1.0
+  ema: true
+  ema_decay: 0.999
 seed: 42
 results_dir: results/

@@ -2,120 +2,160 @@
 Optuna-based hyperparameter tuner for the best model configuration.
 
 Tunes lr, weight_decay, dropout, freeze_fraction, and batch_size
-using TPE sampler with median pruning.
+using TPE sampler with median pruning. Reuses :class:`Trainer` so that
+training-pipeline improvements (no-decay param groups, NaN guard,
+grad clipping, AMP, channels-last) only need to be applied once.
 """
 
 import copy
-import time
+from typing import Callable, Optional
 
 import optuna
-import torch
-import torch.nn.functional as F
-import numpy as np
-from sklearn.metrics import roc_auc_score
 
 from src.model.builder import build_model
-from src.data.dataloader import build_dataloaders
-from src.training.losses import build_weighted_loss
+from src.training.trainer import Trainer
 
 
-def make_objective(model_config, preproc_config, experiment_config, device):
-    """Create an Optuna objective function.
+class OptunaCallback:
+    """Adapter that lets Trainer drive Optuna pruning via a callback hook.
+
+    Optuna's trial.report/should_prune live in the Optuna world, while
+    Trainer's epoch loop only knows about logging/saving. The callback
+    is invoked once per epoch with the current val_auc; it can prune
+    by raising :class:`optuna.exceptions.TrialPruned`.
+    """
+
+    def __init__(self, trial: optuna.trial.Trial):
+        self.trial = trial
+
+    def __call__(self, epoch: int, val_auc: float) -> None:
+        self.trial.report(val_auc, epoch)
+        if self.trial.should_prune():
+            raise optuna.exceptions.TrialPruned()
+
+
+def make_objective(
+    model_config: dict,
+    preproc_config: dict,
+    experiment_config: dict,
+    device: str,
+    build_dataloaders_fn=None,
+    logger_factory: Optional[Callable] = None,
+) -> Callable:
+    """Create an Optuna objective function that delegates to Trainer.
 
     Args:
         model_config: Base model config dict (will be modified per trial).
         preproc_config: Preprocessing config dict.
         experiment_config: Tuning experiment config with search_space.
         device: Device string.
+        build_dataloaders_fn: Optional override (default uses the project's
+            build_dataloaders).
+        logger_factory: Optional ExperimentLogger factory. Trials use a
+            lightweight logger (or None) by default to avoid per-trial
+            disk spam.
 
     Returns:
-        Callable objective(trial) → float (val_auc).
+        Callable ``objective(trial) → float`` returning best_val_auc.
     """
+    from src.data.dataloader import build_dataloaders as _default_loader_fn
+    from src.training.losses import build_weighted_loss
+
+    if build_dataloaders_fn is None:
+        build_dataloaders_fn = _default_loader_fn
+
     search_space = experiment_config.get("search_space", {})
-    max_epochs = experiment_config.get("max_epochs", 100)
-    patience = experiment_config.get("early_stopping_patience", 20)
 
-    def objective(trial):
-        # Sample hyperparameters
-        lr = trial.suggest_float("lr",
-            search_space["lr"]["low"], search_space["lr"]["high"], log=True)
-        weight_decay = trial.suggest_float("weight_decay",
-            search_space["weight_decay"]["low"], search_space["weight_decay"]["high"], log=True)
-        dropout = trial.suggest_float("dropout",
-            search_space["dropout"]["low"], search_space["dropout"]["high"])
-        freeze_fraction = trial.suggest_categorical("freeze_fraction",
-            search_space["freeze_fraction"]["choices"])
-        batch_size = trial.suggest_categorical("batch_size",
-            search_space["batch_size"]["choices"])
+    def objective(trial: optuna.trial.Trial):
+        # ---- 1. Sample hyperparameters ----
+        lr = trial.suggest_float(
+            "lr",
+            search_space["lr"]["low"], search_space["lr"]["high"], log=True,
+        )
+        weight_decay = trial.suggest_float(
+            "weight_decay",
+            search_space["weight_decay"]["low"], search_space["weight_decay"]["high"],
+            log=True,
+        )
+        dropout = trial.suggest_float(
+            "dropout",
+            search_space["dropout"]["low"], search_space["dropout"]["high"],
+        )
+        freeze_fraction = trial.suggest_categorical(
+            "freeze_fraction", search_space["freeze_fraction"]["choices"],
+        )
+        batch_size = trial.suggest_categorical(
+            "batch_size", search_space["batch_size"]["choices"],
+        )
 
-        # Override config
+        # ---- 2. Build per-trial model config ----
         cfg = copy.deepcopy(model_config)
         cfg["freeze_fraction"] = freeze_fraction
         cfg["head"]["dropout"] = dropout
+        cfg["lr"] = lr
+        cfg["weight_decay"] = weight_decay
 
-        # Build model
-        model = build_model(cfg).to(device)
-
-        # Build data
+        # ---- 3. Build model, data, loss (mirrors trainer.py inputs) ----
+        model = build_model(cfg)
         input_size = cfg.get("input_size", 224)
-        train_loader, val_loader, _ = build_dataloaders(
+        train_loader, val_loader, test_loader = build_dataloaders_fn(
             preproc_config, batch_size=batch_size, input_size=input_size,
         )
-
-        # Loss
         class_weights = train_loader.dataset.get_class_weights()
         criterion = build_weighted_loss(class_weights, device=device)
 
-        # Optimizer + scheduler
-        optimizer = torch.optim.AdamW(
-            filter(lambda p: p.requires_grad, model.parameters()),
-            lr=lr, weight_decay=weight_decay,
+        # ---- 4. Trainer plumbing ----
+        logger = (
+            logger_factory(trial) if callable(logger_factory)
+            else _NullLogger()
         )
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max_epochs)
+        callback = OptunaCallback(trial)
 
-        best_val_auc = 0.0
-        epochs_no_improve = 0
+        trainer = Trainer(
+            model=model,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            test_loader=test_loader,
+            criterion=criterion,
+            config=cfg,
+            logger=logger,
+            device=device,
+            checkpoint_path=f"results/tuning/trial_{trial.number}.pt",
+            on_epoch_end=callback,
+            silent=True,
+        )
 
-        for epoch in range(1, max_epochs + 1):
-            # Train
-            model.train()
-            for images, labels in train_loader:
-                images = images.to(device)
-                labels = torch.tensor(labels, dtype=torch.long).to(device) if not isinstance(labels, torch.Tensor) else labels.to(device)
-                optimizer.zero_grad()
-                loss = criterion(model(images), labels)
-                loss.backward()
-                optimizer.step()
-
-            # Validate
-            model.eval()
-            all_labels, all_probs = [], []
-            with torch.no_grad():
-                for images, labels in val_loader:
-                    images = images.to(device)
-                    labels_t = torch.tensor(labels, dtype=torch.long) if not isinstance(labels, torch.Tensor) else labels
-                    probs = F.softmax(model(images), dim=1)
-                    all_labels.extend(labels_t.cpu().numpy())
-                    all_probs.extend(probs[:, 1].cpu().numpy())
-
-            val_auc = roc_auc_score(np.array(all_labels), np.array(all_probs))
-
-            # Report to Optuna for pruning
-            trial.report(val_auc, epoch)
-            if trial.should_prune():
+        try:
+            metrics = trainer.train()
+            return metrics["val_auc_best"]
+        except optuna.exceptions.TrialPruned:
+            raise
+        except Exception as e:
+            # TrialDivergedError caught here: prune the trial.
+            from src.training.trainer import TrialDivergedError
+            if isinstance(e, TrialDivergedError):
+                print(f"[Tuner] Trial pruned: {e}")
                 raise optuna.exceptions.TrialPruned()
-
-            if val_auc > best_val_auc:
-                best_val_auc = val_auc
-                epochs_no_improve = 0
-            else:
-                epochs_no_improve += 1
-
-            if epochs_no_improve >= patience:
-                break
-
-            scheduler.step()
-
-        return best_val_auc
+            raise
 
     return objective
+
+
+class _NullLogger:
+    """No-op logger used by default during Optuna trials.
+
+    Avoids per-trial CSV/JSON spam during sweeps. Trainer only calls
+    ``log_epoch`` and a few other optional methods.
+    """
+
+    def log_epoch(self, *args, **kwargs):
+        pass
+
+    def log_final_metrics(self, *args, **kwargs):
+        pass
+
+    def plot_training_curves(self, *args, **kwargs):
+        pass
+
+    def close(self, *args, **kwargs):
+        pass

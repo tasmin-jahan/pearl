@@ -102,3 +102,63 @@ def save_config(config: dict, path: str) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+
+def parse_overrides(override_args: list) -> dict:
+    """Parse ``--set key.path=value`` style overrides into a nested dict.
+
+    Example::
+
+        ["training.lr=5e-4", "training.batch_size=16"]
+
+    Args:
+        override_args: List of strings of the form ``"dotted.key=value"``.
+
+    Returns:
+        Nested dict of overrides.
+    """
+    overrides = {}
+    for arg in override_args or []:
+        if "=" not in arg:
+            raise ValueError(
+                f"Override must be 'key.path=value', got: {arg}"
+            )
+        keys_path, value = arg.split("=", 1)
+        keys = keys_path.split(".")
+        # Try to parse value as int/float/bool, fall back to string
+        # yaml.safe_load doesn't handle scientific notation like 5e-4,
+        # so try float manually first.
+        parsed: object = value
+        if value.lower() in ("true", "false"):
+            parsed = value.lower() == "true"
+        elif value.lower() in ("null", "none"):
+            parsed = None
+        else:
+            try:
+                parsed = int(value)
+            except ValueError:
+                try:
+                    parsed = float(value)
+                except ValueError:
+                    try:
+                        parsed = yaml.safe_load(value)
+                    except yaml.YAMLError:
+                        parsed = str(value)
+        cur = overrides
+        for k in keys[:-1]:
+            cur = cur.setdefault(k, {})
+        cur[keys[-1]] = parsed
+    return overrides
+
+
+def apply_overrides(config: dict, overrides: dict) -> dict:
+    """Recursively merge ``overrides`` into ``config`` and return a new dict.
+
+    Args:
+        config: Base config dict.
+        overrides: Nested dict from :func:`parse_overrides`.
+
+    Returns:
+        New merged config dict.
+    """
+    return _deep_merge(config, overrides)

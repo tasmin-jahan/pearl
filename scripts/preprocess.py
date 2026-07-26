@@ -24,7 +24,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.utils.config import load_config
 from src.utils.seed import set_seed
-from src.data.splitter import get_image_paths_and_labels, stratified_split
+from src.data.splitter import (
+    get_image_paths_and_labels, stratified_split, _infer_patient_id,
+)
 from src.preprocessing.preprocess import Preprocessor
 
 
@@ -64,15 +66,18 @@ def main():
     print(f"[Preprocess] Config: {config['name']}")
     print(f"[Preprocess] Output: {output_dir}")
 
-    # Get image paths and labels
-    image_paths, labels = get_image_paths_and_labels(args.data_dir)
+    # Get image paths, labels, and patient_ids (group keys)
+    image_paths, labels, patient_ids = get_image_paths_and_labels(args.data_dir)
 
-    # Stratified split
+    # Stratified split (group-aware if patient_ids have repeats)
     (
         train_paths, train_labels,
         val_paths, val_labels,
         test_paths, test_labels,
-    ) = stratified_split(image_paths, labels, seed=args.split_seed)
+    ) = stratified_split(
+        image_paths, labels,
+        patient_ids=patient_ids, seed=args.split_seed,
+    )
 
     # Initialize preprocessor (NO augmentation — that happens at train time)
     preprocessor = Preprocessor(config, input_size=args.input_size)

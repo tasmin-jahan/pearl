@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-CLI entrypoint for the full 54-run sweep (9 models × 6 preprocessing configs).
+CLI entrypoint for matrix sweeps (e.g. the v3 Phase 0 ablation:
+9 models × 2 denoising configs = 18 runs, default hyperparameters).
 
 Usage:
-    python scripts/sweep.py --experiment configs/experiment/sweep_all_54.yaml
+    python scripts/sweep.py --experiment configs/experiment/ablation_18.yaml
 """
 
 import argparse

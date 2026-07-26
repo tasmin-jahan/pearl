@@ -1,0 +1,9 @@
+name: convnext_tiny
+timm_name: convnext_tiny
+input_size: 224
+pretrained: true
+num_classes: 2
+freeze_fraction: 0.60
+head:
+  hidden_dim: 256
+  dropout: 0.5

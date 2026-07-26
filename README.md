@@ -2,135 +2,85 @@
 
 Probabilistic Explainability with Adaptive Reliability via transfer Learning
 
-# PCOS Detection from Ultrasound Images
-
 A config-driven deep learning pipeline for PCOS (Polycystic Ovary Syndrome) detection from ovarian ultrasound images, with model comparison, explainability, calibration, and uncertainty quantification.
 
-## Project Structure
+## Where to look
+
+- **How to run the pipeline** → [`docs/usage.md`](docs/usage.md) — all CLI commands, config schemas, output layouts
+- **Methodology** → [`docs/methodology.tex`](docs/methodology.tex) — full pipeline redesign writeup (LaTeX)
+
+## What's in this codebase (v3)
+
+A 7-phase pipeline, runnable end-to-end from YAML configs:
+
+| Phase | Goal | Entry point |
+|-------|------|-------------|
+| 0 | Decide SRAD vs. Gaussian denoising (9 × 2 = 18 runs, no HPO) | `scripts/sweep.py --experiment ablation_18.yaml` |
+| 1 | Single training run (debug, ablation inspection) | `scripts/train.py` |
+| 2 | Per-architecture Optuna HPO + top-k finalists | `scripts/sweep_hpo.py` |
+| 3 | k-fold CV on top-k finalists only | `scripts/kfold_finalists.py` |
+| 4 | SWA + probability-averaging ensemble | `src/training/swa.py`, `src/evaluation/ensemble.py` |
+| 5 | Two-pass calibration (per-model T + ensemble T) | `scripts/run_calibration*.py` |
+| 6 | XAI (Grad-CAM, LRP, SHAP) and uncertainty (MC Dropout) | `scripts/run_xai.py`, `scripts/run_uncertainty.py` |
+
+The v3 redesign (vs. v1/v2) added: 80/10/10 split with patient-level
+leakage check, SRAD replacing generic AD, SiLU head with dynamic
+`num_classes`, no-decay parameter groups, NaN divergence guard, LR
+warmup + two-phase fine-tuning, EMA + SWA, two-pass calibration,
+self-contained checkpoints with RNG state for resume. See
+`docs/methodology.tex` for the full design rationale.
+
+## Project layout (top level)
 
 ```
-pcos-detection/
-├── configs/                     # All experiment configs (YAML)
-│   ├── preprocessing/           # 6 preprocessing pipelines
-│   ├── model/                   # 9 architecture configs
-│   └── experiment/              # Sweep, tuning, and XAI configs
-├── src/                         # Source modules
-│   ├── data/                    # Dataset, splitter, dataloader
-│   ├── preprocessing/           # Image preprocessing pipeline
-│   ├── model/                   # Model builder + classification head
-│   ├── training/                # Trainer, losses, checkpoints, tuner
-│   ├── evaluation/              # Metrics + evaluator
-│   ├── calibration/             # ECE, reliability diagrams, temperature scaling
-│   ├── uncertainty/             # MC Dropout, referral system
-│   ├── xai/                     # Grad-CAM, LRP, SHAP
-│   └── utils/                   # Config, seed, logging
-├── scripts/                     # CLI entrypoints
-│   ├── preprocess.py            # Preprocess raw dataset
-│   ├── train.py                 # Single training run
-│   ├── sweep.py                 # Full 54-run sweep
-│   ├── evaluate.py              # Standalone evaluation
-│   ├── tune.py                  # Optuna hyperparameter tuning
-│   ├── run_calibration.py       # Calibration analysis
-│   ├── run_uncertainty.py       # MC Dropout + referral system
-│   └── run_xai.py               # Grad-CAM + LRP + SHAP
-└── results/                     # All outputs (auto-created)
+pearl/
+├── configs/
+│   ├── preprocessing/      # 8 configs (incl. v3 standard: srad_clahe, gaussian_clahe)
+│   ├── model/              # 9 v3 architectures (ResNet, DenseNet, EfficientNet-B0,
+│   │                       #   ConvNeXt-T, MobileNetV3-L, ViT-B, Swin-T)
+│   └── experiment/         # ablation_18, tune_per_arch, kfold_finalists, ...
+├── src/                    # data / preprocessing / model / training / evaluation /
+│                           # calibration / uncertainty / xai / utils
+├── scripts/                # CLI entrypoints (preprocess, train, sweep, sweep_hpo,
+│                           # kfold_finalists, smoke_test, run_xai, ...)
+├── tests/                  # pytest suite (config overrides, split overlap, resume)
+├── docs/
+│   ├── usage.md            # full how-to-run
+│   └── methodology.tex     # pipeline redesign paper (LaTeX)
+└── requirements.txt
 ```
 
-## Setup
+## Quick start (one-liner summary)
 
 ```bash
+# 1. Setup (see docs/usage.md for full install)
 pip install -r requirements.txt
-```
 
-## Dataset
+# 2. Smoke test (~15s, no GPU needed)
+python scripts/smoke_test.py
 
-Download the [Figshare PCOS Ultrasound Dataset](https://figshare.com/) and organize as:
-
-```
-data/
-  infected/        # PCOS images (6784)
-  noninfected/     # Non-PCOS images (5000)
-```
-
-## Usage
-
-### 1. Preprocess
-
-```bash
+# 3. Preprocess once
 python scripts/preprocess.py \
-    --config configs/preprocessing/full_ad.yaml \
-    --data_dir /path/to/data \
-    --split_seed 42
+    --config configs/preprocessing/srad_clahe.yaml \
+    --data_dir /path/to/data
+
+# 4. Run the full v3 pipeline (Phases 0 → 6)
+python scripts/sweep.py --experiment configs/experiment/ablation_18.yaml
+python scripts/sweep_hpo.py --experiment configs/experiment/tune_per_arch.yaml
+python scripts/kfold_finalists.py \
+    --experiment configs/experiment/kfold_finalists.yaml \
+    --finalists results/sweep_hpo/finalists.csv \
+    --params_dir results/sweep_hpo/ \
+    --preprocessing srad_clahe \
+    --data_dir /path/to/data
+# (then run downstream XAI / uncertainty / calibration)
 ```
 
-### 2. Train a single model
+See [`docs/usage.md`](docs/usage.md) for the full pipeline reference.
 
-```bash
-python scripts/train.py \
-    --model configs/model/efficientnet_b4.yaml \
-    --preprocessing configs/preprocessing/full_ad.yaml \
-    --experiment configs/experiment/best_model_xai.yaml
-```
+## License & dataset
 
-### 3. Run the full 54-run sweep
+PCOS dataset: Figshare PCOS Ultrasound Dataset (in the `data/` directory
+of the original project; not redistributed here).
 
-```bash
-python scripts/sweep.py --experiment configs/experiment/sweep_all_54.yaml
-```
-
-### 4. Hyperparameter tuning (best model only)
-
-```bash
-python scripts/tune.py \
-    --experiment configs/experiment/tune_best.yaml \
-    --study_name efficientnet_b4_full_ad \
-    --storage sqlite:///results/tuning/optuna.db
-```
-
-### 5. Calibration analysis
-
-```bash
-python scripts/run_calibration.py \
-    --model configs/model/efficientnet_b4.yaml \
-    --preprocessing configs/preprocessing/full_ad.yaml \
-    --checkpoint results/checkpoints/efficientnet_b4__full_ad.pt
-```
-
-### 6. Uncertainty quantification
-
-```bash
-python scripts/run_uncertainty.py \
-    --model configs/model/efficientnet_b4.yaml \
-    --preprocessing configs/preprocessing/full_ad.yaml \
-    --checkpoint results/checkpoints/efficientnet_b4__full_ad.pt \
-    --mc_passes 50
-```
-
-### 7. Explainability (XAI)
-
-```bash
-python scripts/run_xai.py \
-    --model configs/model/efficientnet_b4.yaml \
-    --preprocessing configs/preprocessing/full_ad.yaml \
-    --checkpoint results/checkpoints/efficientnet_b4__full_ad.pt \
-    --methods gradcam lrp shap \
-    --n_samples 20
-```
-
-## Key Design Decisions
-
-- **Config-driven**: Swap YAML configs to run any experiment — no code changes needed
-- **9 architectures**: VGG16/19, ResNet50/101, DenseNet121/169, EfficientNet-B0/B4, Inception V3
-- **6 preprocessing pipelines**: Raw, CLAHE, CLAHE+Gaussian, CLAHE+AD, Full+Gaussian, Full+AD
-- **Class-weighted loss**: Handles the 6784:5000 class imbalance
-- **Stratified 70/15/15 split**: Preserves class distribution
-- **Early stopping**: On validation AUC-ROC with patience=20
-- **MC Dropout**: 50 stochastic forward passes for uncertainty
-- **Temperature scaling**: Post-hoc calibration on validation set
-- **XAI across 4 groups**: Confident-correct, overconfident-error, uncertain-correct, uncertain-wrong
-
-## Naming Convention
-
-All outputs use `{architecture}__{preprocessing}` format:
-- `efficientnet_b4__full_ad.pt`
-- `resnet50__clahe_only_metrics.csv`
+This codebase is research software; not a medical device.
