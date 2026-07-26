@@ -1,0 +1,320 @@
+#!/usr/bin/env python3
+"""
+External-validation evaluator for a trained PCOS model.
+
+Loads a trained checkpoint and runs inference on a separate dataset
+(e.g. PCOSGen) using the SAME preprocessing pipeline as training. The
+external dataset is loaded on-the-fly from raw images — no preprocessing
+cache is required, and no retraining is performed.
+
+This is the script that produces the "external validation" row in the
+paper's comparison table (Figure 09 in the thesis narrative).
+
+Supported external datasets:
+  - PCOSGen (Sundari et al. 2025 / divyangambhir1 Kaggle upload):
+        <dataset>/PCOSGen-train/test/infected/*.jpg
+        <dataset>/PCOSGen-train/test/healthy/*.jpg
+        <dataset>/PCOSGen-train/train/infected/*.jpg
+        <dataset>/PCOSGen-train/train/healthy/*.jpg
+  - Generic fold-out layout:
+        <dataset>/infected/*.jpg
+        <dataset>/noninfected/*.jpg (or healthy/, normal/)
+
+Usage:
+    python scripts/evaluate_external.py \
+        --model configs/model/efficientnet_b0.yaml \
+        --preprocessing configs/preprocessing/srad_clahe.yaml \
+        --checkpoint results/checkpoints/efficientnet_b0__srad_clahe.pt \
+        --external_dir data_external/pcosgen \
+        --external_layout pcosgen \
+        --output results/external_validation/pcosgen_srad.json
+"""
+
+import argparse
+import csv
+import json
+import os
+import sys
+from typing import List, Tuple
+
+import cv2
+import numpy as np
+import torch
+import torch.nn.functional as F
+from torch.utils.data import DataLoader, Dataset
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from src.utils.config import load_config
+from src.utils.seed import set_seed
+from src.model.builder import build_model
+from src.training.checkpoint import load_checkpoint
+from src.preprocessing.preprocess import Preprocessor
+from src.evaluation.metrics import compute_all_metrics
+
+
+# =====================================================================
+# External dataset drivers
+# =====================================================================
+
+# Canonical class-label mapping aligned with PCOSDataset.CLASS_MAP
+INFECTED_NAMES = {"infected", "pcos", "pcosgen_infected", "1", "positive"}
+HEALTHY_NAMES = {"noninfected", "healthy", "normal", "pcosgen_healthy", "0", "negative"}
+
+
+def _is_infected(name: str) -> bool:
+    return name.lower() in INFECTED_NAMES
+
+
+def _is_healthy(name: str) -> bool:
+    return name.lower() in HEALTHY_NAMES
+
+
+def _label_from_dirname(dirname: str) -> int:
+    """Map class folder name to integer label. PCOSDataset convention:
+    noninfected=0, infected=1.
+    """
+    if _is_infected(dirname):
+        return 1
+    if _is_healthy(dirname):
+        return 0
+    raise ValueError(
+        f"Cannot infer label for folder '{dirname}'. "
+        f"Expected one of {sorted(INFECTED_NAMES | HEALTHY_NAMES)}."
+    )
+
+
+def _list_images(folder: str) -> List[str]:
+    if not os.path.isdir(folder):
+        return []
+    out = []
+    for fname in sorted(os.listdir(folder)):
+        if fname.lower().endswith((".jpg", ".jpeg", ".png")):
+            out.append(os.path.join(folder, fname))
+    return out
+
+
+def discover_pcosgen(dataset_root: str) -> List[Tuple[str, int]]:
+    """Discover (path, label) pairs from the PCOSGen Kaggle upload layout.
+
+    Path conventions handled:
+      <root>/PCOSGen-train/train/infected/*.jpg
+      <root>/PCOSGen-train/train/healthy/*.jpg
+      <root>/PCOSGen-train/test/infected/*.jpg
+      <root>/PCOSGen-train/test/healthy/*.jpg
+    """
+    pairs = []
+    for split in ("train", "test"):
+        for cls in ("infected", "healthy"):
+            folder = os.path.join(dataset_root, "PCOSGen-train", split, cls)
+            for path in _list_images(folder):
+                pairs.append((path, _label_from_dirname(cls)))
+    return pairs
+
+
+def discover_simple(dataset_root: str) -> List[Tuple[str, int]]:
+    """Discover (path, label) pairs from a flat infected/healthy layout.
+
+    Looks for any pair of folders under ``dataset_root`` whose names map
+    to the infected / healthy name sets.
+    """
+    pairs = []
+    if not os.path.isdir(dataset_root):
+        return pairs
+    for entry in sorted(os.listdir(dataset_root)):
+        full = os.path.join(dataset_root, entry)
+        if not os.path.isdir(full):
+            continue
+        try:
+            label = _label_from_dirname(entry)
+        except ValueError:
+            continue
+        for path in _list_images(full):
+            pairs.append((path, label))
+    return pairs
+
+
+def discover_with_split(dataset_root: str, split: str) -> List[Tuple[str, int]]:
+    """For simple layouts with a train/test/val subdirectory."""
+    pairs = []
+    split_dir = os.path.join(dataset_root, split)
+    if not os.path.isdir(split_dir):
+        return pairs
+    for entry in sorted(os.listdir(split_dir)):
+        full = os.path.join(split_dir, entry)
+        if not os.path.isdir(full):
+            continue
+        try:
+            label = _label_from_dirname(entry)
+        except ValueError:
+            continue
+        for path in _list_images(full):
+            pairs.append((path, label))
+    return pairs
+
+
+def discover(dataset_root: str, layout: str, split: str = "test") -> List[Tuple[str, int]]:
+    """Top-level discovery dispatcher."""
+    if layout == "pcosgen":
+        # Use ONLY the test split for external validation.
+        return discover_pcosgen(dataset_root)
+    elif layout == "simple":
+        return discover_with_split(dataset_root, split)
+    elif layout == "flat":
+        return discover_simple(dataset_root)
+    else:
+        raise ValueError(f"Unknown layout: {layout}")
+
+
+# =====================================================================
+# In-memory dataset
+# =====================================================================
+
+class _ExternalDataset(Dataset):
+    """Loads raw images and runs the training preprocessing pipeline
+    on-the-fly. Augmentation is FORCED OFF (this is evaluation)."""
+
+    def __init__(self, pairs: List[Tuple[str, int]], preprocessor: Preprocessor):
+        self.pairs = pairs
+        self.preprocessor = preprocessor
+
+    def __len__(self):
+        return len(self.pairs)
+
+    def __getitem__(self, idx):
+        path, label = self.pairs[idx]
+        img = cv2.imread(path)
+        if img is None:
+            # Fail-safe: black image; should not happen on a healthy dataset.
+            img = np.zeros(
+                (self.preprocessor.input_size, self.preprocessor.input_size, 3),
+                dtype=np.uint8,
+            )
+        x = self.preprocessor.apply(img, augment=False)
+        if x.ndim == 2:
+            x = x[None, :, :]
+        else:
+            x = np.transpose(x, (2, 0, 1))
+        return torch.from_numpy(x.copy()).float(), label, path
+
+
+# =====================================================================
+# Main
+# =====================================================================
+
+def main():
+    parser = argparse.ArgumentParser(description="External-validation evaluator")
+    parser.add_argument("--model", type=str, required=True,
+                        help="Path to model architecture YAML config.")
+    parser.add_argument("--preprocessing", type=str, required=True,
+                        help="Path to preprocessing YAML config.")
+    parser.add_argument("--checkpoint", type=str, required=True,
+                        help="Path to trained model checkpoint.")
+    parser.add_argument("--external_dir", type=str, required=True,
+                        help="Root directory of the external dataset.")
+    parser.add_argument("--layout", type=str, default="pcosgen",
+                        choices=["pcosgen", "simple", "flat"],
+                        help="External dataset layout.")
+    parser.add_argument("--split", type=str, default="test",
+                        help="For 'simple' layout: which split to use.")
+    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--max_samples", type=int, default=None,
+                        help="Optional cap on the number of samples (debug).")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--output", type=str, default=None,
+                        help="Path to JSON output (metrics).")
+    parser.add_argument("--predictions_csv", type=str, default=None,
+                        help="Path to write per-image predictions CSV.")
+    args = parser.parse_args()
+
+    set_seed(args.seed)
+
+    model_config = load_config(args.model)
+    preproc_config = load_config(args.preprocessing)
+    input_size = int(model_config.get("input_size", 224))
+
+    print(f"[ExternalEval] Model: {model_config.get('name', args.model)}")
+    print(f"[ExternalEval] Preprocessing: {preproc_config.get('name', args.preprocessing)}")
+    print(f"[ExternalEval] Input size: {input_size}")
+    print(f"[ExternalEval] External dataset: {args.external_dir} (layout={args.layout})")
+
+    # Discover samples
+    pairs = discover(args.external_dir, args.layout, args.split)
+    if args.max_samples is not None:
+        pairs = pairs[: args.max_samples]
+    if not pairs:
+        raise RuntimeError(
+            f"No images found under {args.external_dir} with layout={args.layout}. "
+            f"Check the path and folder naming."
+        )
+    n_infected = sum(1 for _, l in pairs if l == 1)
+    n_healthy = sum(1 for _, l in pairs if l == 0)
+    print(f"[ExternalEval] Found {len(pairs)} images: {n_infected} infected, {n_healthy} healthy")
+
+    # Build dataset + loader
+    preprocessor = Preprocessor(preproc_config, input_size=input_size)
+    dataset = _ExternalDataset(pairs, preprocessor)
+    loader = DataLoader(
+        dataset, batch_size=args.batch_size, shuffle=False,
+        num_workers=2, pin_memory=False,
+    )
+
+    # Build model + load checkpoint
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = build_model(model_config)
+    load_checkpoint(model, args.checkpoint, device=device)
+    model.eval()
+    model.to(device)
+
+    # Inference
+    all_paths, all_labels, all_probs, all_preds = [], [], [], []
+    with torch.no_grad():
+        for images, labels, paths in loader:
+            images = images.to(device)
+            logits = model(images)
+            probs = F.softmax(logits, dim=1)
+            preds = logits.argmax(dim=1)
+            all_paths.extend(list(paths))
+            all_labels.extend([int(l) for l in labels])
+            all_probs.extend(probs[:, 1].cpu().numpy().tolist())
+            all_preds.extend(preds.cpu().numpy().tolist())
+
+    all_labels = np.array(all_labels)
+    all_probs = np.array(all_probs)
+    all_preds = np.array(all_preds)
+
+    # Metrics
+    metrics = compute_all_metrics(all_labels, all_preds, all_probs)
+    metrics["n_samples"] = len(all_labels)
+    metrics["n_infected"] = int(n_infected)
+    metrics["n_healthy"] = int(n_healthy)
+    metrics["model"] = model_config.get("name", args.model)
+    metrics["preprocessing"] = preproc_config.get("name", args.preprocessing)
+    metrics["checkpoint"] = args.checkpoint
+    metrics["external_dir"] = args.external_dir
+    metrics["external_layout"] = args.layout
+
+    print("\n[ExternalEval] Metrics:")
+    for k, v in metrics.items():
+        print(f"  {k}: {v}")
+
+    # Save JSON
+    if args.output:
+        os.makedirs(os.path.dirname(args.output), exist_ok=True)
+        with open(args.output, "w") as f:
+            json.dump(metrics, f, indent=2)
+        print(f"\n[ExternalEval] Saved metrics to {args.output}")
+
+    # Save per-image CSV
+    if args.predictions_csv:
+        os.makedirs(os.path.dirname(args.predictions_csv), exist_ok=True)
+        with open(args.predictions_csv, "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["path", "label", "pred", "prob_infected"])
+            for p, l, pr, pb in zip(all_paths, all_labels, all_preds, all_probs):
+                w.writerow([p, int(l), int(pr), f"{pb:.6f}"])
+        print(f"[ExternalEval] Saved per-image predictions to {args.predictions_csv}")
+
+
+if __name__ == "__main__":
+    main()

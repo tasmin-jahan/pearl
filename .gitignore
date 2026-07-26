@@ -58,3 +58,5 @@ Thumbs.db
 # --- Project specific ---
 no_upload/
 hybridseednet/
+data_external/
+context.md

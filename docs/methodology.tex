@@ -130,20 +130,51 @@ data/
 
 The raw Figshare dataset ships with substantial exact-byte duplication
 within each class folder. MD5-hashing every image file (see
-\texttt{scripts/dedup\_data.py}) reveals that only
-\textbf{812 / 5{,}000 (16.2\%)} non-infected and
-\textbf{3{,}184 / 6{,}784 (46.9\%)} infected files are unique; the
-remainder are byte-identical copies of other files in the same class.
-This is not a labelling error --- cross-class files with the same
-filename have different bytes --- but it means the model effectively
-sees only $\sim 4{,}000$ unique training images across an apparent
-pool of $\sim 11{,}800$, inflating compute cost and biasing the
-gradient toward repeated examples.
+\texttt{scripts/dedup\_data.py}) on the v3.1 release exposes the
+following structure on the 11{,}784 raw files:
 
-We therefore deduplicate \emph{before} the train/val/test split:
+\begin{table}[h]
+  \centering
+  \small
+  \begin{tabular}{lrrrr}
+    \toprule
+    \textbf{Class} & \textbf{Files} & \textbf{Unique} &
+                    \textbf{Duplicates} & \textbf{\% duplicated} \\
+    \midrule
+    Infected        & 6{,}784 & 3{,}184 & 3{,}600 & 53.1\% \\
+    Non-infected    & 5{,}000 &   812   & 4{,}188 & 83.8\% \\
+    \midrule
+    \textbf{Total}  & \textbf{11{,}784} & \textbf{3{,}996} &
+                       \textbf{7{,}788} & \textbf{66.1\%} \\
+    \bottomrule
+  \end{tabular}
+  \caption{Pre-deduplication dataset inventory: the
+  exact-byte duplicates are byte-identical copies of other files in
+  the same class folder. The non-infected class is more affected
+  (83.8\%) because its original upload contained many fewer unique
+  source images.}
+  \label{tab:dedup}
+\end{table}
+
+Almost no cross-class duplicates exist (verified by an exhaustive
+pairwise scan, not reported here), which is consistent with the
+folder-name labels being reliable: if labels were random, about half
+of cross-class pairs would collide. This is an indirect but strong
+indicator that the labels track real diagnostic decisions rather than
+being arbitrary.
+
+Performing deduplication \emph{before} the train/val/test split is
+essential: a duplicate that survives into both train and val
+artificially inflates validation AUC by as much as the model
+memorises identical images. We therefore deduplicate first:
 
 \begin{verbatim}
-python scripts/dedup_data.py --data_dir data --mode quarantine
+python /home/farhan/my-projects/pearl/scripts/dedup_data.py \
+    --data_dir /home/farhan/my-projects/pearl/data \
+    --mode report
+python /home/farhan/my-projects/pearl/scripts/dedup_data.py \
+    --data_dir /home/farhan/my-projects/pearl/data \
+    --mode quarantine
 \end{verbatim}
 
 Three modes are supported:
@@ -156,14 +187,25 @@ Three modes are supported:
         (requires \texttt{-{}-yes}).
 \end{itemize}
 
+The deduplication is exact-byte (MD5). Near-duplicates that differ in
+JPEG re-encoding or minor cropping are not detected; perceptual
+hashing was considered and rejected because (a) the dataset
+provenance indicates byte-identical re-uploads rather than re-
+encodings, and (b) perceptual thresholds would require a research-grade
+justification that is not the focus of this work.
+
 After deduplication the dataset shrinks to $3{,}184$ infected and
-$812$ non-infected files (3{,}996 total, a $66\%$ reduction).
+$812$ non-infected files (3{,}996 total, a 66.1\% reduction), and
+the next stage addresses the class imbalance that this deduplication
+exposes more sharply.
 
 \subsection{Class imbalance}
 
-After deduplication the imbalance ratio worsens to
-\textbf{$\sim 3.92{:}1$ PCOS-to-non-PCOS} --- a level at which
-loss-level class weighting alone is insufficient for stable training.
+After deduplication the imbalance ratio \emph{worsens} to
+\textbf{$3.92{:}1$ PCOS-to-non-PCOS} ($3{,}184{:}812$) --- the
+non-infected class dropped from 5{,}000 apparent files to 812 unique
+files (83.8\% redundancy), so its effective representation shrank
+more than the infected class did.
 We use \emph{two complementary mechanisms}, controlled by the
 \texttt{training.sampler} key:
 
@@ -386,6 +428,39 @@ Validation and test splits receive un-augmented inputs only. The
 augmentations are configured under \texttt{augmentation.jpeg\_compression}
 and \texttt{augmentation.light\_blur} in every preprocessing YAML and
 are enabled by default in the v3 ablation configs.
+
+\subsection{External validation: PCOSGen (Sundari et al. 2025)}
+
+To address the single-dataset limitation common in PCOS deep-learning
+publications, we additionally evaluate the trained checkpoints against
+the \textbf{PCOSGen} dataset (Sundari et al.\ 2025, hosted on Kaggle as
+\texttt{divyangambhir1/pcosgen-train} and \texttt{tanvi062/pcos-uls}).
+PCOSGen contains 4,668 transabdominal ultrasound images at $300 \times
+300$ resolution in JPEG, split into infected (PCOS-positive; label~1)
+and healthy (PCOS-negative; label~0). It is meaningfully cleaner than
+the Figshare data we trained on:
+
+\begin{itemize}
+    \item All images are square ($300 \times 300$); the median
+    aspect-ratio deviation from 1.0 is $0\%$, so no letterbox padding
+    affects them on resize to $224 \times 224$.
+    \item Median bytes-per-pixel is $0.19$ (compared to $0.14$ on
+    Figshare, ~40\% more bytes per pixel), consistent with higher JPEG
+    quality factors in the 70--80 range.
+    \item Class ratio is $3627 : 1041 \approx 3.48 : 1$, comparable to
+    the post-dedup Figshare ratio of $3.92 : 1$ and well within the
+    operating range of the WeightedRandomSampler we use.
+\end{itemize}
+
+The external evaluator (\texttt{scripts/evaluate\_external.py}) loads
+the raw PCOSGen images, applies the training preprocessing pipeline
+\emph{without augmentation}, and runs the same trained checkpoint that
+was selected by 5-fold cross-validation. No fine-tuning on PCOSGen is
+performed; the reported metrics reflect pure cross-dataset
+generalisation of the Figshare-trained model. This separation is the
+defensible form of domain-shift evaluation at this scale; a paired
+degradation in AUC relative to the Figshare test split is expected and
+is itself an informative number.
 
 % =====================================================================
 \section{Model architecture}

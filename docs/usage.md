@@ -471,6 +471,59 @@ specificity, F1, AUC-ROC, MCC). Optionally writes JSON if `--output` is set.
 
 ---
 
+### `scripts/evaluate_external.py`
+
+External-validation evaluator: runs a trained checkpoint against a
+**different** dataset (no leakage from training/test splits). This is
+the script that produces the "external validation" row in the paper's
+comparison table.
+
+The external dataset is loaded on-the-fly from raw images — no
+preprocessing cache needed. The same preprocessing config used in
+training is applied at inference time so the comparison is apples-to-
+apples.
+
+**Layouts supported**:
+- `pcosgen` — the Sundari et al. 2025 PCOSGen Kaggle upload (train+test
+  splits combined; uses `infected`/`healthy` folder names).
+- `simple` — `<dataset>/<split>/<class>/*.jpg` (PCOSDataset convention).
+- `flat` — `<dataset>/<class>/*.jpg` (no split subdir).
+
+```bash
+python scripts/evaluate_external.py \
+    --model configs/model/efficientnet_b0.yaml \
+    --preprocessing configs/preprocessing/srad_clahe.yaml \
+    --checkpoint results/checkpoints/efficientnet_b0__srad_clahe.pt \
+    --external_dir /home/farhan/my-projects/pearl/data_external/pcosgen \
+    --external_layout pcosgen \
+    --output results/external_validation/pcosgen_srad_clahe.json \
+    --predictions_csv results/external_validation/pcosgen_srad_clahe.csv
+```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--model` | str | **required** | Path to model config YAML. |
+| `--preprocessing` | str | **required** | Path to preprocessing config YAML. Must match the preprocessing the model was trained with. |
+| `--checkpoint` | str | **required** | Path to `.pt` checkpoint. |
+| `--external_dir` | str | **required** | Root directory of the external dataset. |
+| `--external_layout` | str | `pcosgen` | One of `pcosgen`, `simple`, `flat`. |
+| `--split` | str | `test` | For `simple` layout: which subdir to use. |
+| `--batch_size` | int | `32` | Inference batch size. |
+| `--max_samples` | int | `None` | Optional cap on number of samples (debug only). |
+| `--seed` | int | `42` | Seed for any RNG in the loader. |
+| `--output` | str | `None` | If set, write metrics JSON to this path. |
+| `--predictions_csv` | str | `None` | If set, write per-image `(path, label, pred, prob_infected)` rows. |
+
+**Outputs**: prints all metrics including `n_samples`, `n_infected`,
+`n_healthy`. Optionally writes JSON if `--output` is set, and per-image
+predictions CSV if `--predictions_csv` is set.
+
+**Note**: This script does not perform any model fine-tuning on the
+external data. The reported numbers reflect pure domain-shift
+performance of the model as trained on the Figshare PCOS dataset.
+
+---
+
 ### `scripts/run_calibration.py`
 
 Per-model temperature scaling (Pass 1 of two-pass calibration).
