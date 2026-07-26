@@ -98,8 +98,10 @@ def make_objective(
         # ---- 3. Build model, data, loss (mirrors trainer.py inputs) ----
         model = build_model(cfg)
         input_size = cfg.get("input_size", 224)
+        sampler = cfg.get("sampler", "shuffle")
         train_loader, val_loader, test_loader = build_dataloaders_fn(
             preproc_config, batch_size=batch_size, input_size=input_size,
+            sampler=sampler,
         )
         class_weights = train_loader.dataset.get_class_weights()
         criterion = build_weighted_loss(class_weights, device=device)

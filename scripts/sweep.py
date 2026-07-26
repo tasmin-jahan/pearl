@@ -76,8 +76,10 @@ def main():
             # Data
             input_size = model_config.get("input_size", 224)
             batch_size = training_config.get("batch_size", 32)
+            sampler = training_config.get("sampler", "shuffle")
             train_loader, val_loader, test_loader = build_dataloaders(
                 preproc_config, batch_size=batch_size, input_size=input_size,
+                sampler=sampler,
             )
 
             # Model

@@ -2,7 +2,14 @@
 Full preprocessing pipeline for PCOS ultrasound images.
 
 Applies a configurable sequence of:
-  resize → CLAHE → Gaussian / Anisotropic Diffusion (or SRAD) → Z-score normalization
+  letterbox-resize → CLAHE → Gaussian / Anisotropic Diffusion (or SRAD) → Z-score normalization
+
+Resize is aspect-preserving by default: the longer side is scaled to
+``input_size`` (224 for all current models) and the shorter side is
+letterboxed with reflected edge pixels. This preserves follicle shape
+geometry that would otherwise be distorted by naive stretching. Set
+``steps.padding: "none"`` in the preprocessing YAML to revert to the
+legacy stretch behaviour (used by the v1/v2 ablation configs).
 
 Two denoising options are supported for the diffusion step:
   - "anisotropic_diffusion": generic Perona-Malik AD (driven by gradient magnitude,
@@ -37,6 +44,76 @@ class Preprocessor:
         self.steps = config.get("steps", {})
         self.aug_config = config.get("augmentation", {})
         self.input_size = input_size
+        # Padding strategy for the resize step. Options:
+        #   "none"     — stretch to (input_size, input_size); legacy.
+        #   "reflect"  — letterbox, pad with edge-replicated pixels (default;
+        #                recommended for medical imaging).
+        #   "constant" — letterbox, pad with the configured pad_value.
+        self.padding = self.steps.get("padding", "reflect").lower()
+        self.pad_value = int(self.steps.get("pad_value", 0))
+
+    def _resize_with_padding(self, image: np.ndarray) -> np.ndarray:
+        """Aspect-preserving resize + letterbox pad.
+
+        Resize so the LONGER side equals ``self.input_size`` (preserving
+        aspect ratio), then pad the shorter side to reach a square of
+        ``(input_size, input_size)``. The pad is replicated edge pixels
+        by default — this avoids the dark-border confound that zero-
+        padding introduces, and matches the convention used by YOLO
+        and most medical-imaging pipelines.
+
+        Args:
+            image: HxWxC uint8 image.
+
+        Returns:
+            (input_size, input_size, C) uint8 image.
+        """
+        h, w = image.shape[:2]
+        if h == 0 or w == 0:
+            return np.zeros((self.input_size, self.input_size, 3),
+                            dtype=image.dtype)
+        # 1) Scale so the longer side = input_size
+        scale = self.input_size / max(h, w)
+        new_h = max(1, int(round(h * scale)))
+        new_w = max(1, int(round(w * scale)))
+        if (new_h, new_w) != (h, w):
+            image = cv2.resize(
+                image, (new_w, new_h), interpolation=cv2.INTER_CUBIC,
+            )
+        # 2) Pad to square on the shorter side
+        pad_h = self.input_size - new_h
+        pad_w = self.input_size - new_w
+        # Centre the image: half the pad on each side
+        top = pad_h // 2
+        bottom = pad_h - top
+        left = pad_w // 2
+        right = pad_w - left
+        if self.padding == "none":
+            # Edge case: caller explicitly wants stretch even with
+            # this code path (e.g. ablations). Force square.
+            return cv2.resize(
+                image, (self.input_size, self.input_size),
+                interpolation=cv2.INTER_CUBIC,
+            )
+        if self.padding == "constant":
+            value = self.pad_value
+        else:  # "reflect" (default) — replicate edge pixels
+            value = None  # signal to cv2.copyMakeBorder below
+        # cv2.copyMakeBorder accepts a scalar value OR a 4-tuple of BGR
+        # values. For "reflect" we use borderType=BORDER_REFLECT_101.
+        border_type = (
+            cv2.BORDER_CONSTANT if self.padding == "constant"
+            else cv2.BORDER_REFLECT_101
+        )
+        return cv2.copyMakeBorder(
+            image, top, bottom, left, right,
+            borderType=border_type,
+            value=(
+                (value,) * image.shape[2]
+                if (value is not None and image.ndim == 3)
+                else (value if value is not None else 0)
+            ),
+        )
 
     def apply(self, image: np.ndarray, augment: bool = False) -> np.ndarray:
         """Apply the full preprocessing pipeline to a single image.
@@ -48,13 +125,17 @@ class Preprocessor:
         Returns:
             Preprocessed image as HxWxC float32 numpy array.
         """
-        # Step 0: Resize (bicubic)
+        # Step 0: Resize (letterbox by default; set steps.padding: 'none'
+        # to revert to the legacy stretch behaviour).
         if self.steps.get("resize", True):
-            image = cv2.resize(
-                image,
-                (self.input_size, self.input_size),
-                interpolation=cv2.INTER_CUBIC,
-            )
+            if self.padding == "none":
+                image = cv2.resize(
+                    image,
+                    (self.input_size, self.input_size),
+                    interpolation=cv2.INTER_CUBIC,
+                )
+            else:
+                image = self._resize_with_padding(image)
 
         # Step 1: CLAHE
         clahe_cfg = self.steps.get("clahe", {})

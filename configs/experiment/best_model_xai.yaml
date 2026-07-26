@@ -25,5 +25,8 @@ training:
   grad_clip_norm: 1.0
   ema: true
   ema_decay: 0.999
+  # Class-imbalance sampler: "shuffle" (default) | "weighted" | "none".
+  # Use "weighted" when imbalance > 3x (post-dedup PCOS is 3.92x).
+  sampler: weighted
 seed: 42
 results_dir: results/

@@ -46,6 +46,7 @@ build/
 *.swp
 *.swo
 *~
+todo.md
 
 # --- Jupyter ---
 .ipynb_checkpoints/
@@ -56,6 +57,4 @@ Thumbs.db
 
 # --- Project specific ---
 no_upload/
-results/
-docs/
 hybridseednet/

@@ -59,12 +59,18 @@ pip install -r requirements.txt
 # 2. Smoke test (~15s, no GPU needed)
 python scripts/smoke_test.py
 
-# 3. Preprocess once
+# 3. Deduplicate the raw dataset (the Figshare download ships with
+#    ~83% byte-duplicate noninfected and ~53% infected files — see
+#    notebooks/eda_figures and docs/methodology.tex). Reversible:
+python scripts/dedup_data.py --data_dir /path/to/data --mode report     # audit only
+python scripts/dedup_data.py --data_dir /path/to/data --mode quarantine # move to data/_duplicates/
+
+# 4. Preprocess once
 python scripts/preprocess.py \
     --config configs/preprocessing/srad_clahe.yaml \
     --data_dir /path/to/data
 
-# 4. Run the full v3 pipeline (Phases 0 → 6)
+# 5. Run the full v3 pipeline (Phases 0 → 6)
 python scripts/sweep.py --experiment configs/experiment/ablation_18.yaml
 python scripts/sweep_hpo.py --experiment configs/experiment/tune_per_arch.yaml
 python scripts/kfold_finalists.py \

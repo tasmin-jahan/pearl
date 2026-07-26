@@ -155,6 +155,18 @@ def main():
     # Get all paths once (in-memory CV doesn't write preprocessed data)
     all_paths, all_labels, all_groups = get_image_paths_and_labels(args.data_dir)
 
+    # ---- Per-fold metrics to record in the summary CSV ----
+    # Defined centrally so every fold row has the same columns.
+    PER_FOLD_KEYS = [
+        "test_auc_roc", "test_auc_roc_ci_low", "test_auc_roc_ci_high",
+        "test_auc_pr", "test_accuracy", "test_precision", "test_recall",
+        "test_specificity", "test_f1", "test_mcc",
+        "test_nll", "test_brier",
+        "youden_threshold", "youden_sensitivity", "youden_specificity",
+        "op_threshold_at_sens", "op_specificity_at_target",
+        "test_tp", "test_fp", "test_tn", "test_fn",
+    ]
+
     summary_rows = []
     for arch in args.finalists_list:
         print(f"\n{'='*60}\n[K-Fold] Architecture: {arch}\n{'='*60}")
@@ -176,22 +188,44 @@ def main():
                     fold_idx, train_idx, val_idx,
                 )
                 per_fold.append(metrics)
-                summary_rows.append({
+                row = {
                     "arch": arch, "fold": fold_idx,
                     "val_auc": metrics["val_auc_best"],
-                    "test_auc": metrics.get("test_auc_roc", float("nan")),
-                })
+                }
+                for k in PER_FOLD_KEYS:
+                    row[k] = metrics.get(k, float("nan"))
+                summary_rows.append(row)
             except Exception as e:
                 print(f"[K-Fold] {arch} fold {fold_idx} failed: {e}")
 
         if per_fold:
             aucs = [m["val_auc_best"] for m in per_fold]
-            print(f"[K-Fold] {arch}: mean AUC = {np.mean(aucs):.4f} ± {np.std(aucs):.4f}")
+            test_aucs = [m.get("test_auc_roc", float("nan")) for m in per_fold]
+            print(f"[K-Fold] {arch}: val AUC = {np.mean(aucs):.4f} ± {np.std(aucs):.4f}")
+            print(f"[K-Fold] {arch}: test AUC = {np.nanmean(test_aucs):.4f} ± {np.nanstd(test_aucs):.4f}")
 
     # ---- Summary CSV ----
     pd.DataFrame(summary_rows).to_csv(
         os.path.join(args.out_dir, "kfold_summary.csv"), index=False,
     )
+
+    # ---- Per-arch mean ± std across folds (paper-grade table) ----
+    if summary_rows:
+        df = pd.DataFrame(summary_rows)
+        agg = df.groupby("arch").agg(
+            val_auc_mean=("val_auc", "mean"),
+            val_auc_std=("val_auc", "std"),
+            test_auc_mean=("test_auc_roc", "mean"),
+            test_auc_std=("test_auc_roc", "std"),
+            test_f1_mean=("test_f1", "mean"),
+            test_mcc_mean=("test_mcc", "mean"),
+            test_brier_mean=("test_brier", "mean"),
+        ).round(4)
+        agg_path = os.path.join(args.out_dir, "kfold_per_arch_summary.csv")
+        agg.to_csv(agg_path)
+        print(f"\n[K-Fold] Per-arch mean/std written to {agg_path}")
+        print(agg.to_string())
+
     print(f"[K-Fold] Summary written to {args.out_dir}/kfold_summary.csv")
 
 

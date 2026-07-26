@@ -35,5 +35,7 @@ training:
   channels_last: true
   grad_clip_norm: 1.0
   ema: true
+  # Class-imbalance sampler (post-dedup imbalance = 3.92x)
+  sampler: weighted
 seed: 42
 results_dir: results/ablation/

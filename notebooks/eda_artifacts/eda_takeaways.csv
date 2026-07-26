@@ -1,0 +1,11 @@
+Attribute,Value
+Dataset size,"11,784 images"
+Classes,"infected (PCOS), noninfected"
+Class imbalance ratio,1.36x
+Modal resolution,300 x 300
+Colour mode,RGB
+Corrupt images,0
+Duplicate images,9744
+Near-uniform images (sample),0
+Split,80/10/10 stratified
+Train / Val / Test,"9,410 / 1,186 / 1,188"

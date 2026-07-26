@@ -30,5 +30,7 @@ training:
   swa: true
   swa_start_epoch: 60
   swa_lr: 1.0e-5
+  # Class-imbalance sampler (post-dedup imbalance = 3.92x)
+  sampler: weighted
 seed: 42
 results_dir: results/kfold/

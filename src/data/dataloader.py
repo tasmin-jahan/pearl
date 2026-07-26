@@ -9,10 +9,36 @@ from typing import List, Sequence, Tuple
 
 import cv2
 import numpy as np
-from torch.utils.data import DataLoader, Dataset
+import torch
+from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 
 from src.data.dataset import PCOSDataset
 from src.preprocessing.preprocess import Preprocessor
+
+
+def make_weighted_sampler(labels: Sequence[int]) -> WeightedRandomSampler:
+    """Per-sample weights = 1 / class frequency, for WeightedRandomSampler.
+
+    Equivalent to inverse-frequency sampling: each batch sees the two
+    classes in roughly equal proportion regardless of dataset imbalance.
+    Use this when loss-level class weighting (see ``build_weighted_loss``)
+    is insufficient — typically when imbalance > 3x.
+
+    Args:
+        labels: Per-sample integer labels (0/1).
+
+    Returns:
+        WeightedRandomSampler with replacement, num_samples = len(labels).
+    """
+    labels_t = torch.as_tensor(labels, dtype=torch.long)
+    class_counts = torch.bincount(labels_t, minlength=int(labels_t.max().item()) + 1).float()
+    # Per-sample weight = 1 / class_count
+    per_sample_weight = 1.0 / class_counts[labels_t].clamp_min(1.0)
+    return WeightedRandomSampler(
+        weights=per_sample_weight.double(),
+        num_samples=len(labels_t),
+        replacement=True,
+    )
 
 
 def build_dataloaders(
@@ -21,6 +47,7 @@ def build_dataloaders(
     input_size: int = 224,
     num_workers: int = 4,
     pin_memory: bool = True,
+    sampler: str = "shuffle",
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """Build train, val, and test DataLoaders from preprocessed files on disk.
 
@@ -30,6 +57,11 @@ def build_dataloaders(
         input_size: Input image size (for augmentation transforms).
         num_workers: Number of DataLoader workers.
         pin_memory: Whether to pin memory for GPU transfer.
+        sampler: Train-sampler strategy:
+            - "shuffle" (default): standard random shuffle.
+            - "weighted": WeightedRandomSampler for inverse-frequency
+              class balancing. Use when class imbalance > 3x.
+            - "none": deterministic order (for debugging).
 
     Returns:
         Tuple of (train_loader, val_loader, test_loader).
@@ -53,8 +85,32 @@ def build_dataloaders(
 
     print(f"[DataLoader] Train: {len(train_dataset)}, Val: {len(val_dataset)}, Test: {len(test_dataset)}")
 
+    # ---- Train sampler selection ----
+    if sampler == "weighted":
+        # Recover labels from the dataset — supports both list/dict
+        # dataset backends used in this codebase.
+        if hasattr(train_dataset, "labels"):
+            labels_seq = train_dataset.labels
+        elif hasattr(train_dataset, "samples"):
+            labels_seq = [s[1] for s in train_dataset.samples]
+        else:
+            # Fallback: iterate the dataset once (slow but safe).
+            labels_seq = [int(train_dataset[i][1]) for i in range(len(train_dataset))]
+        train_sampler = make_weighted_sampler(labels_seq)
+        shuffle_flag = False
+        print(f"[DataLoader] Sampler: weighted (inverse-frequency)")
+    elif sampler == "none":
+        train_sampler = None
+        shuffle_flag = False
+        print(f"[DataLoader] Sampler: none (deterministic order)")
+    else:
+        train_sampler = None
+        shuffle_flag = True
+        print(f"[DataLoader] Sampler: shuffle")
+
     train_loader = DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=True,
+        train_dataset, batch_size=batch_size,
+        shuffle=shuffle_flag, sampler=train_sampler,
         num_workers=num_workers, pin_memory=pin_memory, drop_last=True,
     )
     val_loader = DataLoader(

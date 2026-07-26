@@ -23,8 +23,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from sklearn.metrics import roc_auc_score, f1_score, matthews_corrcoef
 
+from src.evaluation.metrics import compute_epoch_metrics
 from src.training.checkpoint import save_checkpoint
 from src.utils.logging import ExperimentLogger
 
@@ -284,7 +284,7 @@ class Trainer:
 
             try:
                 train_loss, train_acc = self._train_one_epoch(epoch)
-                val_loss, val_acc, val_auc, val_f1, val_mcc = self._validate()
+                val_loss, val_acc, val_auc, val_f1, val_mcc, val_metrics = self._validate()
             except TrialDivergedError as e:
                 if not self.silent:
                     print(f"\n[Trainer] TrialDiverged at epoch {epoch}: {e}")
@@ -297,6 +297,14 @@ class Trainer:
                 epoch, train_loss, val_loss,
                 train_acc, val_acc, val_auc, val_f1, val_mcc,
                 current_lr, epoch_time,
+                val_precision=val_metrics["precision"],
+                val_recall=val_metrics["recall"],
+                val_specificity=val_metrics["specificity"],
+                val_nll=val_metrics["nll"],
+                val_tp=val_metrics["tp"],
+                val_fp=val_metrics["fp"],
+                val_tn=val_metrics["tn"],
+                val_fn=val_metrics["fn"],
             )
 
             # ---- EMA update ----
@@ -340,7 +348,14 @@ class Trainer:
             print(f"[Trainer] Best val AUC: {self.best_val_auc:.4f} at epoch {self.best_epoch}")
 
         # ---- Load best (or EMA-weighted) checkpoint for test eval ----
-        eval_metrics = self._evaluate_test_with_ema()
+        eval_metrics, (labels_np, probs_np, preds_np) = self._evaluate_test_with_ema()
+
+        # ---- Save ROC / PR curves + confusion matrices to disk ----
+        try:
+            self._save_curve_artifacts(labels_np, probs_np, preds_np)
+        except Exception as e:
+            if not self.silent:
+                print(f"[Trainer] curve-artifact save skipped: {e}")
 
         # ---- Build final metrics dict ----
         final_metrics = {
@@ -368,6 +383,97 @@ class Trainer:
         self.logger.close()
 
         return final_metrics
+
+    def _save_curve_artifacts(self, labels, probs, preds):
+        """Save ROC curve, PR curve, and confusion matrix PNGs + raw arrays.
+
+        Produces:
+          - roc_curve.png, pr_curve.png, confusion_matrix.png
+          - roc_curve.npz, pr_curve.npz (raw arrays for later re-plotting)
+        """
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from sklearn.metrics import confusion_matrix as sk_cm
+
+        from src.evaluation.metrics import compute_curves
+
+        curves = compute_curves(labels, probs)
+        run_dir = self.logger.run_dir
+        os.makedirs(run_dir, exist_ok=True)
+
+        # ---- ROC curve ----
+        fig, ax = plt.subplots(figsize=(6, 6))
+        ax.plot(curves["fpr"], curves["tpr"],
+                color="tab:blue", linewidth=2,
+                label=f"AUC = {curves.get('auprc', 0):.3f}")
+        ax.plot([0, 1], [0, 1], "k--", alpha=0.5, label="Chance")
+        ax.set_xlabel("False Positive Rate")
+        ax.set_ylabel("True Positive Rate")
+        ax.set_title("Test ROC Curve")
+        ax.legend(loc="lower right")
+        ax.grid(True, alpha=0.3)
+        fig.tight_layout()
+        fig.savefig(os.path.join(run_dir, "roc_curve.png"), dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        np.savez(
+            os.path.join(run_dir, "roc_curve.npz"),
+            fpr=curves["fpr"], tpr=curves["tpr"],
+            thresholds=curves["roc_thresholds"],
+        )
+
+        # ---- PR curve ----
+        fig, ax = plt.subplots(figsize=(6, 6))
+        ax.plot(curves["recall"], curves["precision"],
+                color="tab:orange", linewidth=2,
+                label=f"AUC-PR = {curves['auprc']:.3f}")
+        ax.set_xlabel("Recall")
+        ax.set_ylabel("Precision")
+        ax.set_title("Test Precision-Recall Curve")
+        ax.legend(loc="lower left")
+        ax.grid(True, alpha=0.3)
+        fig.tight_layout()
+        fig.savefig(os.path.join(run_dir, "pr_curve.png"), dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        np.savez(
+            os.path.join(run_dir, "pr_curve.npz"),
+            precision=curves["precision"], recall=curves["recall"],
+            thresholds=curves["pr_thresholds"],
+        )
+
+        # ---- Confusion matrix ----
+        cm = sk_cm(labels, preds)
+        fig, ax = plt.subplots(figsize=(5, 5))
+        im = ax.imshow(cm, cmap="Blues")
+        ax.set_xticks([0, 1])
+        ax.set_yticks([0, 1])
+        ax.set_xticklabels(["Negative", "Positive"])
+        ax.set_yticklabels(["Negative", "Positive"])
+        ax.set_xlabel("Predicted")
+        ax.set_ylabel("True")
+        ax.set_title("Test Confusion Matrix")
+        for i in range(2):
+            for j in range(2):
+                ax.text(j, i, str(cm[i, j]), ha="center", va="center",
+                        color="white" if cm[i, j] > cm.max() / 2 else "black")
+        fig.colorbar(im, ax=ax)
+        fig.tight_layout()
+        fig.savefig(
+            os.path.join(run_dir, "confusion_matrix.png"),
+            dpi=150, bbox_inches="tight",
+        )
+        plt.close(fig)
+
+        # Save raw arrays for downstream analysis (DeLong, calibration)
+        np.savez(
+            os.path.join(run_dir, "test_predictions.npz"),
+            labels=labels.astype(int),
+            probs=probs.astype(float),
+            preds=preds.astype(int),
+        )
+
+        if not self.silent:
+            print(f"[Trainer] Saved curve artifacts to {run_dir}")
 
     # ------------------------------------------------------------------
     # Per-epoch train + validate
@@ -435,7 +541,12 @@ class Trainer:
 
     @torch.no_grad()
     def _validate(self):
-        """Validate and return (loss, acc, auc, f1, mcc)."""
+        """Validate and return (loss, acc, auc, f1, mcc, metrics_dict).
+
+        The metrics_dict carries the full per-epoch stack so the trainer
+        can log precision/recall/specificity/NLL/confusion-matrix counts
+        alongside the headline AUC/F1.
+        """
         self.model.eval()
         running_loss = 0.0
         all_labels, all_probs, all_preds = [], [], []
@@ -465,19 +576,27 @@ class Trainer:
         all_probs_np = np.array(all_probs)
         all_preds_np = np.array(all_preds)
 
-        accuracy = (all_preds_np == all_labels_np).mean()
-        try:
-            auc = roc_auc_score(all_labels_np, all_probs_np)
-        except Exception:
-            auc = 0.5
-        f1 = f1_score(all_labels_np, all_preds_np, zero_division=0)
-        mcc = matthews_corrcoef(all_labels_np, all_preds_np) if total > 1 else 0.0
-
-        return avg_loss, accuracy, auc, f1, mcc
+        m = compute_epoch_metrics(
+            all_labels_np, all_preds_np, all_probs_np,
+        )
+        # Headline scalars (kept for early-stopping convenience)
+        return (
+            avg_loss,
+            m["acc"],
+            m["auc"],
+            m["f1"],
+            m["mcc"],
+            m,  # full metrics dict for richer logging
+        )
 
     @torch.no_grad()
     def _evaluate_test(self):
-        """Evaluate on test set and return metrics dict."""
+        """Evaluate on test set and return (metrics_dict, raw_arrays).
+
+        The raw arrays (labels, probs, preds) are needed downstream for
+        saving ROC / PR curves and confusion matrices to disk. Keeping
+        them in the return value avoids a second pass over the loader.
+        """
         self.model.eval()
         all_labels, all_probs, all_preds = [], [], []
         use_amp = self.device.startswith("cuda")
@@ -495,10 +614,13 @@ class Trainer:
             all_probs.extend(probs[:, 1].cpu().numpy())
             all_preds.extend(preds.cpu().numpy())
 
+        labels_np = np.array(all_labels)
+        probs_np = np.array(all_probs)
+        preds_np = np.array(all_preds)
+
         from src.evaluation.metrics import compute_all_metrics
-        return compute_all_metrics(
-            np.array(all_labels), np.array(all_preds), np.array(all_probs),
-        )
+        metrics = compute_all_metrics(labels_np, preds_np, probs_np)
+        return metrics, (labels_np, probs_np, preds_np)
 
     def _evaluate_test_with_ema(self):
         """Evaluate on test set with EMA weights if available.
@@ -506,6 +628,9 @@ class Trainer:
         Loads best checkpoint, swaps in EMA weights, runs test eval,
         then restores the original (non-EMA) weights for the
         best-checkpoint state.
+
+        Returns:
+            (metrics_dict, raw_arrays) — see :meth:`_evaluate_test`.
         """
         # Load best model state
         ckpt = torch.load(
@@ -518,9 +643,9 @@ class Trainer:
         if self.ema is not None:
             self.ema.store(self.model)
             self.ema.copy_to(self.model)
-            metrics = self._evaluate_test()
+            result = self._evaluate_test()
             self.ema.restore(self.model)
-            return metrics
+            return result
         return self._evaluate_test()
 
     def _unwrap_compiled(self):

@@ -27,9 +27,17 @@ EPOCH_LOG_HEADER = [
     "val_loss",
     "train_acc",
     "val_acc",
-    "val_auc",
+    "val_precision",
+    "val_recall",
+    "val_specificity",
     "val_f1",
     "val_mcc",
+    "val_auc",
+    "val_nll",
+    "val_tp",
+    "val_fp",
+    "val_tn",
+    "val_fn",
     "lr",
     "epoch_time_sec",
 ]
@@ -94,6 +102,14 @@ class ExperimentLogger:
         val_mcc: float,
         lr: float,
         epoch_time: float,
+        val_precision: float = 0.0,
+        val_recall: float = 0.0,
+        val_specificity: float = 0.0,
+        val_nll: float = float("nan"),
+        val_tp: int = 0,
+        val_fp: int = 0,
+        val_tn: int = 0,
+        val_fn: int = 0,
     ) -> None:
         """Append one row to epoch_log.csv and print (using tqdm.write if active)."""
         row = [
@@ -102,9 +118,14 @@ class ExperimentLogger:
             f"{val_loss:.6f}",
             f"{train_acc:.4f}",
             f"{val_acc:.4f}",
-            f"{val_auc:.4f}",
+            f"{val_precision:.4f}",
+            f"{val_recall:.4f}",
+            f"{val_specificity:.4f}",
             f"{val_f1:.4f}",
             f"{val_mcc:.4f}",
+            f"{val_auc:.4f}",
+            f"{val_nll:.4f}",
+            int(val_tp), int(val_fp), int(val_tn), int(val_fn),
             f"{lr:.2e}",
             f"{epoch_time:.1f}",
         ]
@@ -114,7 +135,7 @@ class ExperimentLogger:
         line = (
             f"  Epoch {epoch:>3d} | "
             f"train_loss={train_loss:.4f}  val_loss={val_loss:.4f} | "
-            f"val_acc={val_acc:.4f}  val_auc={val_auc:.4f}  val_f1={val_f1:.4f} | "
+            f"val_acc={val_acc:.4f}  val_auc={val_auc:.4f}  val_f1={val_f1:.4f}  val_mcc={val_mcc:.4f} | "
             f"lr={lr:.2e}  time={epoch_time:.1f}s"
         )
         # tqdm.write avoids corrupting progress bars; falls back to print if not active
