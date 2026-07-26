@@ -242,13 +242,17 @@ def _aggregate_external_validation(checkpoints_root: str, output_path: str):
             "arch": arch,
             "dataset": dataset,
             "n_samples": d.get("n_samples"),
-            "auc": d.get("auc_roc", d.get("auc", None)),
-            "accuracy": d.get("accuracy", None),
-            "f1": d.get("f1", None),
-            "mcc": d.get("mcc", None),
-            "precision": d.get("precision", None),
-            "recall": d.get("recall", None),
-            "specificity": d.get("specificity", None),
+            # The per-arch JSONs use the ``test_*`` prefix (mirroring
+            # ``compute_all_metrics`` output). Read both naming
+            # conventions so older JSONs (and any external scripts)
+            # still aggregate cleanly.
+            "auc":        d.get("test_auc_roc", d.get("auc_roc", d.get("auc"))),
+            "accuracy":   d.get("test_accuracy", d.get("accuracy")),
+            "f1":         d.get("test_f1", d.get("f1")),
+            "mcc":        d.get("test_mcc", d.get("mcc")),
+            "precision":  d.get("test_precision", d.get("precision")),
+            "recall":     d.get("test_recall", d.get("recall")),
+            "specificity": d.get("test_specificity", d.get("specificity")),
         })
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
