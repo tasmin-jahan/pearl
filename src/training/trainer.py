@@ -10,6 +10,7 @@ Training loop with AdamW + cosine annealing + early stopping, v3 features:
   - RNG + dataloader state resumption (Phase 3.3)
   - Rolling-window checkpoint retention (Phase 3.4)
   - Self-contained checkpoint with arch + class_names (Phase 3.2)
+  - Rich UI: per-epoch progress bar + colored epoch summary panel
 """
 
 import copy
@@ -27,6 +28,40 @@ import torch.nn.functional as F
 from src.evaluation.metrics import compute_epoch_metrics
 from src.training.checkpoint import save_checkpoint
 from src.utils.logging import ExperimentLogger
+
+# Rich UI — graceful fallback if the user doesn't have rich installed.
+try:
+    from rich.console import Console, Group
+    from rich.live import Live
+    from rich.panel import Panel
+    from rich.progress import (
+        BarColumn, MofNCompleteColumn, Progress, SpinnerColumn,
+        TextColumn, TimeElapsedColumn, TimeRemainingColumn,
+    )
+    from rich.table import Table
+    from rich.text import Text
+    _RICH_AVAILABLE = True
+except Exception:  # pragma: no cover - rich is optional
+    _RICH_AVAILABLE = False
+
+
+def _rich_supported() -> bool:
+    """Return True if rich output is usable in the current environment.
+
+    The trainer is also invoked under pytest collection (where stdout is
+    captured) and inside Optuna trials (where a live display is unwanted).
+    Both callers can pass ``silent=True`` to disable this layer.
+    """
+    if not _RICH_AVAILABLE:
+        return False
+    # Disable rich when running under pytest (no TTY, no point in live UI).
+    import sys as _sys
+    if "pytest" in _sys.modules:
+        return False
+    # Disable when stdout is not a TTY (e.g. redirected to a file).
+    if not _sys.stdout.isatty():
+        return False
+    return True
 
 
 class TrialDivergedError(RuntimeError):
@@ -198,6 +233,9 @@ class Trainer:
         if self.freeze_epochs > 0:
             self._freeze_backbone(True)
 
+        # ---- Rich console (created lazily; reused across epochs) ----
+        self._console = Console() if _rich_supported() else None
+
     # ------------------------------------------------------------------
     # Optimizer with no-decay param groups
     # ------------------------------------------------------------------
@@ -237,6 +275,82 @@ class Trainer:
                 p.requires_grad = not freeze
 
     # ------------------------------------------------------------------
+    # Rich UI rendering
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _color_auc(auc: float) -> str:
+        """Map AUC to a color: green for high, yellow for mid, red for low."""
+        if auc >= 0.95:
+            return "bold green"
+        if auc >= 0.85:
+            return "green"
+        if auc >= 0.70:
+            return "yellow"
+        return "red"
+
+    @staticmethod
+    def _color_loss(loss: float) -> str:
+        if loss < 0.2:
+            return "bold green"
+        if loss < 0.5:
+            return "green"
+        if loss < 1.0:
+            return "yellow"
+        return "red"
+
+    def _render_epoch_panel(
+        self,
+        epoch: int,
+        train_loss: float,
+        train_acc: float,
+        val_loss: float,
+        val_acc: float,
+        val_auc: float,
+        val_f1: float,
+        val_mcc: float,
+        lr: float,
+        epoch_time: float,
+        epochs_without_improvement: int = 0,
+    ):
+        """Build a richly-colored epoch summary panel."""
+        # Compute delta from best so the user can see improvement at a glance.
+        star = "  "
+        if val_auc > self.best_val_auc:
+            star = "★ "
+        if val_auc >= self.best_val_auc and self.best_val_auc > 0.0:
+            star = "★ "  # already best
+
+        grid = Table.grid(padding=(0, 2))
+        grid.add_column(justify="right", style="dim")
+        grid.add_column(justify="left")
+
+        grid.add_row("train_loss", f"[{self._color_loss(train_loss)}]{train_loss:.4f}[/]")
+        grid.add_row("val_loss",   f"[{self._color_loss(val_loss)}]{val_loss:.4f}[/]")
+        grid.add_row("train_acc",   f"{train_acc:.4f}")
+        grid.add_row("val_acc",     f"{val_acc:.4f}")
+        grid.add_row("val_auc",     f"[{self._color_auc(val_auc)}]{val_auc:.4f}[/]")
+        grid.add_row("val_f1",      f"[{self._color_auc(val_f1)}]{val_f1:.4f}[/]")
+        grid.add_row("val_mcc",     f"[{self._color_auc(val_mcc)}]{val_mcc:.4f}[/]")
+        grid.add_row("lr",          f"{lr:.2e}")
+        grid.add_row("epoch_time",  f"{epoch_time:.1f}s")
+        if epochs_without_improvement > 0:
+            grid.add_row(
+                "patience",
+                f"[yellow]{epochs_without_improvement}/{self.patience}[/]",
+            )
+
+        best_str = f"best={self.best_val_auc:.4f}@e{self.best_epoch}"
+        title = f"[bold cyan]{star}Epoch {epoch:03d}[/]  [dim]{best_str}[/]"
+
+        return Panel(
+            grid,
+            title=title,
+            border_style="cyan",
+            padding=(0, 1),
+            expand=False,
+        )
+
+    # ------------------------------------------------------------------
     # Main training loop
     # ------------------------------------------------------------------
     def train(self, resume_from: Optional[str] = None) -> dict:
@@ -252,6 +366,7 @@ class Trainer:
         if resume_from is not None:
             self._resume_state(resume_from)
 
+        use_rich = (not self.silent) and _rich_supported()
         if not self.silent:
             print(f"\n{'='*60}")
             print(f"Training for up to {self.max_epochs} epochs "
@@ -282,16 +397,76 @@ class Trainer:
                 for pg in self.optimizer.param_groups:
                     pg["lr"] = warmup_lr
 
+            # Rich Live progress for the whole epoch (train + validate)
+            train_progress = None
+            live_ctx = None
+            epoch_table = None
+            if use_rich:
+                train_progress = Progress(
+                    SpinnerColumn(),
+                    TextColumn(f"[bold cyan]E{epoch:03d}"),
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(bar_width=None),
+                    MofNCompleteColumn(),
+                    TextColumn("•"),
+                    TimeElapsedColumn(),
+                    TextColumn("•"),
+                    TimeRemainingColumn(),
+                    console=self._console,
+                    transient=True,
+                )
+                epoch_table = Table.grid(padding=(0, 1))
+                epoch_table.add_row(train_progress)
+                live_ctx = Live(
+                    epoch_table, console=self._console,
+                    refresh_per_second=8, transient=False,
+                )
+                live_ctx.__enter__()
+                train_task = train_progress.add_task(
+                    "training", total=len(self.train_loader),
+                )
+                self._live_ctx = live_ctx
+                self._train_progress = train_progress
+                self._train_task = train_task
+            else:
+                self._live_ctx = None
+                self._train_progress = None
+                self._train_task = None
+
             try:
                 train_loss, train_acc = self._train_one_epoch(epoch)
                 val_loss, val_acc, val_auc, val_f1, val_mcc, val_metrics = self._validate()
             except TrialDivergedError as e:
+                if live_ctx is not None:
+                    live_ctx.__exit__(None, None, None)
+                    self._live_ctx = None
                 if not self.silent:
                     print(f"\n[Trainer] TrialDiverged at epoch {epoch}: {e}")
+                raise
+            except Exception:
+                if live_ctx is not None:
+                    live_ctx.__exit__(None, None, None)
+                    self._live_ctx = None
                 raise
 
             epoch_time = time.time() - epoch_start
             current_lr = self.optimizer.param_groups[0]["lr"]
+
+            # Render the rich epoch summary panel before exiting Live context
+            if use_rich and live_ctx is not None:
+                panel = self._render_epoch_panel(
+                    epoch, train_loss, train_acc,
+                    val_loss, val_acc, val_auc, val_f1, val_mcc,
+                    current_lr, epoch_time,
+                    epochs_without_improvement=self.epochs_without_improvement,
+                )
+                # Stop the progress bar so the panel sits at the bottom.
+                if train_progress is not None:
+                    train_progress.update(self._train_task, completed=len(self.train_loader))
+                # Add panel as the second row of the table.
+                epoch_table.add_row(panel)
+                live_ctx.__exit__(None, None, None)
+                self._live_ctx = None
 
             self.logger.log_epoch(
                 epoch, train_loss, val_loss,
@@ -334,7 +509,12 @@ class Trainer:
 
             # ---- Early stopping ----
             if self.epochs_without_improvement >= self.patience:
-                if not self.silent:
+                if use_rich:
+                    self._console.print(
+                        f"[bold yellow]⏹  Early stopping at epoch {epoch} "
+                        f"(no improvement for {self.patience} epochs)[/]"
+                    )
+                elif not self.silent:
                     print(f"\n[Trainer] Early stopping at epoch {epoch} "
                           f"(no improvement for {self.patience} epochs)")
                 break
@@ -344,8 +524,17 @@ class Trainer:
         epochs_trained = epoch
 
         if not self.silent:
-            print(f"\n[Trainer] Training complete in {total_time:.0f}s")
-            print(f"[Trainer] Best val AUC: {self.best_val_auc:.4f} at epoch {self.best_epoch}")
+            if use_rich and self._console is not None:
+                self._console.print(
+                    f"\n[bold green]✓ Training complete[/] "
+                    f"[dim]({total_time:.0f}s, {epochs_trained} epochs)[/]\n"
+                    f"  best val AUC = [bold cyan]{self.best_val_auc:.4f}[/] "
+                    f"@ epoch [bold]{self.best_epoch}[/]"
+                    + ("  [yellow](early-stopped)[/]" if stopped_early else "")
+                )
+            else:
+                print(f"\n[Trainer] Training complete in {total_time:.0f}s")
+                print(f"[Trainer] Best val AUC: {self.best_val_auc:.4f} at epoch {self.best_epoch}")
 
         # ---- Load best (or EMA-weighted) checkpoint for test eval ----
         eval_metrics, (labels_np, probs_np, preds_np) = self._evaluate_test_with_ema()
@@ -382,7 +571,53 @@ class Trainer:
                 print(f"[Trainer] plot_training_curves skipped: {e}")
         self.logger.close()
 
+        # ---- Rich final summary panel ----
+        if use_rich and self._console is not None:
+            self._render_final_panel(final_metrics, total_time)
+
         return final_metrics
+
+    def _render_final_panel(self, final_metrics: dict, total_time: float):
+        """Render a colored test-set summary panel at the end of training."""
+        grid = Table.grid(padding=(0, 2))
+        grid.add_column(justify="right", style="dim")
+        grid.add_column(justify="left")
+
+        key_metrics = [
+            ("test_auc",      "AUC-ROC"),
+            ("test_accuracy", "Accuracy"),
+            ("test_f1",       "F1"),
+            ("test_mcc",      "MCC"),
+            ("test_precision", "Precision"),
+            ("test_recall",   "Sensitivity"),
+            ("test_specificity", "Specificity"),
+            ("test_nll",      "NLL"),
+            ("test_brier",    "Brier"),
+        ]
+        for k, label in key_metrics:
+            v = final_metrics.get(k, float("nan"))
+            if isinstance(v, float):
+                if "auc" in k or "accuracy" in k or "f1" in k or "mcc" in k \
+                        or "precision" in k or "recall" in k or "specificity" in k:
+                    grid.add_row(label, f"[{self._color_auc(v)}]{v:.4f}[/]")
+                else:
+                    grid.add_row(label, f"{v:.4f}")
+
+        grid.add_row("---", "---")
+        grid.add_row("epochs", f"{final_metrics['epochs_trained']}")
+        grid.add_row("best_epoch", f"{final_metrics['best_epoch']}")
+        grid.add_row("early_stopped",
+                     "[yellow]yes[/]" if final_metrics["stopped_early"] else "[green]no[/]")
+        grid.add_row("wall_time", f"{total_time:.0f}s ({total_time/60:.1f}m)")
+
+        self._console.print(
+            Panel(
+                grid,
+                title="[bold green]✓ Test Results[/]",
+                border_style="green",
+                padding=(0, 1),
+            )
+        )
 
     def _save_curve_artifacts(self, labels, probs, preds):
         """Save ROC curve, PR curve, and confusion matrix PNGs + raw arrays.
@@ -486,6 +721,7 @@ class Trainer:
           - grad clipping + NaN guard (Phase 2.2 + 2.4)
           - channels_last + non_blocking transfers
           - EMA param update
+          - Rich progress bar advance (when rich UI is active)
         """
         self.model.train()
         running_loss = 0.0
@@ -534,6 +770,18 @@ class Trainer:
             preds = logits.argmax(dim=1)
             correct += (preds == labels).sum().item()
             total += images.size(0)
+
+            # ---- Rich progress bar advance ----
+            if self._train_progress is not None and self._train_task is not None:
+                # Update description with running loss for live feedback.
+                running_avg_loss = running_loss / max(total, 1)
+                running_acc = correct / max(total, 1)
+                self._train_progress.update(
+                    self._train_task, advance=1,
+                    description=(
+                        f"loss={running_avg_loss:.4f} acc={running_acc:.4f}"
+                    ),
+                )
 
         avg_loss = running_loss / max(total, 1)
         accuracy = correct / max(total, 1)
@@ -668,7 +916,7 @@ class Trainer:
         """Save a numbered checkpoint in the same dir; prune to keep_last_n."""
         base_dir = os.path.dirname(self.checkpoint_path)
         recent_path = os.path.join(
-            base_dir, f"{os.path.splitext(os.path.basename(self.checkpoint_path))[0]}__epoch{epoch}.pt",
+            base_dir, f"{os.path.splitext(os.path.basename(self.checkpoint_path))[0]}_e{epoch}.pt",
         )
         save_checkpoint(
             self._unwrap_compiled(), self.optimizer, epoch, val_auc,
@@ -677,11 +925,11 @@ class Trainer:
         self._prune_old_checkpoints(base_dir)
 
     def _prune_old_checkpoints(self, base_dir: str):
-        """Keep only the keep_last_n most recent __epoch*.pt files."""
+        """Keep only the keep_last_n most recent _e*.pt files."""
         prefix = os.path.splitext(os.path.basename(self.checkpoint_path))[0]
         files = []
         for f in os.listdir(base_dir):
-            if f.startswith(prefix + "__epoch") and f.endswith(".pt"):
+            if f.startswith(prefix + "_e") and f.endswith(".pt"):
                 files.append(os.path.join(base_dir, f))
         files.sort(key=lambda p: os.path.getmtime(p))
         for old in files[:-self.keep_last_n]:

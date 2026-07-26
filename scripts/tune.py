@@ -5,7 +5,7 @@ CLI entrypoint for Optuna hyperparameter tuning.
 Usage:
     python scripts/tune.py \
         --experiment configs/experiment/tune_best.yaml \
-        --study_name efficientnet_b4_full_ad \
+        --study_name swin_tiny_srad \
         --storage sqlite:///results/tuning/optuna.db
 """
 
@@ -110,11 +110,13 @@ def main():
     best_cfg["head"]["dropout"] = study.best_trial.params["dropout"]
 
     best_model = build_model(best_cfg)
-    ckpt_path = os.path.join(
+    ckpt_dir = os.path.join(
         os.path.dirname(results_dir.rstrip("/")),
         "checkpoints",
-        f"{model_name}__{preproc_name}__tuned.pt",
+        preproc_name,
     )
+    os.makedirs(ckpt_dir, exist_ok=True)
+    ckpt_path = os.path.join(ckpt_dir, f"{model_name}__tuned.pt")
     save_checkpoint(best_model, torch.optim.AdamW(best_model.parameters()),
                     0, study.best_trial.value, ckpt_path)
 

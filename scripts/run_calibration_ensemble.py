@@ -10,7 +10,7 @@ Usage:
     python scripts/run_calibration_ensemble.py \
         --model_configs configs/ensemble/finalists.yaml \
         --checkpoints results/finalists.txt \
-        --preprocessing configs/preprocessing/srad_clahe.yaml
+        --preprocessing configs/preprocessing/srad.yaml
 """
 
 import argparse

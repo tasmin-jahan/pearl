@@ -3,7 +3,7 @@ mode: single
 # v3: best model slot is filled post-sweep; swin_tiny is a placeholder
 # default that you overwrite via --model once the sweep winners are known.
 model: swin_tiny
-preprocessing: srad_clahe
+preprocessing: srad
 training:
   optimizer: adamw
   lr: 1.0e-4

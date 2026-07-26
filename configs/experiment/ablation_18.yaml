@@ -5,8 +5,8 @@ name: preprocessing_ablation_18
 # for Phase 6 sweep + downstream.
 mode: ablation
 preprocessing:
-  - srad_clahe
-  - gaussian_clahe
+  - srad
+  - gauss
 models:
   - resnet50
   - resnet101

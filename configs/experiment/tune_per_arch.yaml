@@ -12,7 +12,7 @@ models:
   - mobilenetv3_large
   - vit_base
   - swin_tiny
-preprocessing: srad_clahe  # winning preprocessing only (Phase 0.4)
+preprocessing: srad  # winning preprocessing only (Phase 0.4)
 n_trials_per_arch: 20       # per-architecture trial budget
 top_k_finalists: 3          # only top-k proceed to k-fold (Phase 6.2/3)
 direction: maximize

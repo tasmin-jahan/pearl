@@ -4,9 +4,9 @@ CLI entrypoint for standalone evaluation of a trained model.
 
 Usage:
     python scripts/evaluate.py \
-        --model configs/model/efficientnet_b4.yaml \
-        --preprocessing configs/preprocessing/full_ad.yaml \
-        --checkpoint results/checkpoints/efficientnet_b4__full_ad.pt
+        --model configs/model/swin_tiny.yaml \
+        --preprocessing configs/preprocessing/srad.yaml \
+        --checkpoint results/checkpoints/srad/swin_tiny.pt
 """
 
 import argparse

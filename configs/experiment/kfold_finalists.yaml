@@ -7,7 +7,7 @@ finalists:
   - resnet101
   - densenet121   # placeholder — overwrite after HPO sweep
 n_folds: 5
-preprocessing: srad_clahe
+preprocessing: srad
 training:
   optimizer: adamw
   lr: 1.0e-4

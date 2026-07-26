@@ -35,7 +35,7 @@ self-contained checkpoints with RNG state for resume. See
 ```
 pearl/
 ├── configs/
-│   ├── preprocessing/      # 8 configs (incl. v3 standard: srad_clahe, gaussian_clahe)
+│   ├── preprocessing/      # 8 configs (incl. v3 standard: srad, gauss)
 │   ├── model/              # 9 v3 architectures (ResNet, DenseNet, EfficientNet-B0,
 │   │                       #   ConvNeXt-T, MobileNetV3-L, ViT-B, Swin-T)
 │   └── experiment/         # ablation_18, tune_per_arch, kfold_finalists, ...
@@ -67,7 +67,7 @@ python scripts/dedup_data.py --data_dir /path/to/data --mode quarantine # move t
 
 # 4. Preprocess once
 python scripts/preprocess.py \
-    --config configs/preprocessing/srad_clahe.yaml \
+    --config configs/preprocessing/srad.yaml \
     --data_dir /path/to/data
 
 # 5. Run the full v3 pipeline (Phases 0 → 6)
@@ -77,7 +77,7 @@ python scripts/kfold_finalists.py \
     --experiment configs/experiment/kfold_finalists.yaml \
     --finalists results/sweep_hpo/finalists.csv \
     --params_dir results/sweep_hpo/ \
-    --preprocessing srad_clahe \
+    --preprocessing srad \
     --data_dir /path/to/data
 # (then run downstream XAI / uncertainty / calibration)
 ```

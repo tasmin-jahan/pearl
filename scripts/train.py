@@ -5,10 +5,10 @@ CLI entrypoint for a single training run.
 Usage:
     python scripts/train.py \
         --model configs/model/swin_tiny.yaml \
-        --preprocessing configs/preprocessing/srad_clahe.yaml \
+        --preprocessing configs/preprocessing/srad.yaml \
         --experiment configs/experiment/best_model_xai.yaml \
         --set training.lr=5e-4 training.batch_size=16 \
-        --run_dir results/runs/swin_tiny__srad_clahe__20260518  # optional
+        --run_dir results/runs/swin_tiny__srad__20260518  # optional
 
 Dynamic overrides: ``--set <dotted.key.path>=<value>`` (repeatable).
 """
@@ -103,10 +103,10 @@ def main():
     class_weights = train_loader.dataset.get_class_weights()
     criterion = build_weighted_loss(class_weights, device=device)
 
-    # Checkpoint path
-    checkpoint_path = os.path.join(
-        results_dir, "checkpoints", f"{arch}__{preproc_name}.pt"
-    )
+    # Checkpoint path: <results>/checkpoints/<prep>/<arch>.pt
+    checkpoint_dir = os.path.join(results_dir, "checkpoints", preproc_name)
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    checkpoint_path = os.path.join(checkpoint_dir, f"{arch}.pt")
 
     # Train (with optional resume)
     trainer = Trainer(

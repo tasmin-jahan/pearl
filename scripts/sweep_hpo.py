@@ -52,7 +52,7 @@ def main():
         n_startup_trials=5, n_warmup_steps=exp_config.get("pruner_warmup_steps", 5),
     )
 
-    preproc_name = exp_config.get("preprocessing", "srad_clahe")
+    preproc_name = exp_config.get("preprocessing", "srad")
     preproc_config = load_config(f"configs/preprocessing/{preproc_name}.yaml")
 
     summary_rows = []

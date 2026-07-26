@@ -71,11 +71,11 @@ previous one to have finished.
 ```bash
 # Step 1 — Preprocess both ablation arms
 python scripts/preprocess.py \
-    --config configs/preprocessing/srad_clahe.yaml \
+    --config configs/preprocessing/srad.yaml \
     --data_dir $DATA_DIR --split_seed 42
 
 python scripts/preprocess.py \
-    --config configs/preprocessing/gaussian_clahe.yaml \
+    --config configs/preprocessing/gauss.yaml \
     --data_dir $DATA_DIR --split_seed 42
 
 # Step 2 — Run the 18-run ablation (9 archs × 2 denoising configs)
@@ -87,7 +87,7 @@ import pandas as pd
 df = pd.read_csv('results/ablation/sweep_matrix.csv')
 print(df.groupby('preprocessing')['val_auc'].agg(['mean', 'std', 'count']))
 "
-# Lock in the winner; assume srad_clahe from here on.
+# Lock in the winner; assume srad from here on.
 
 # Step 4 — Per-architecture Optuna HPO sweep (9 archs × N trials)
 python scripts/sweep_hpo.py \
@@ -99,33 +99,33 @@ python scripts/kfold_finalists.py \
     --experiment configs/experiment/kfold_finalists.yaml \
     --finalists results/sweep_hpo/finalists.csv \
     --params_dir results/sweep_hpo/ \
-    --preprocessing srad_clahe \
+    --preprocessing srad \
     --data_dir $DATA_DIR
 
 # Step 6 — Downstream analyses (per-model)
 python scripts/run_calibration.py \
     --model configs/model/swin_tiny.yaml \
-    --preprocessing configs/preprocessing/srad_clahe.yaml \
-    --checkpoint results/checkpoints/swin_tiny__srad_clahe.pt
+    --preprocessing configs/preprocessing/srad.yaml \
+    --checkpoint results/checkpoints/srad/swin_tiny.pt
 
 python scripts/run_xai.py \
     --model configs/model/swin_tiny.yaml \
-    --preprocessing configs/preprocessing/srad_clahe.yaml \
-    --checkpoint results/checkpoints/swin_tiny__srad_clahe.pt \
+    --preprocessing configs/preprocessing/srad.yaml \
+    --checkpoint results/checkpoints/srad/swin_tiny.pt \
     --methods gradcam lrp shap --n_samples 20
 
 python scripts/run_uncertainty.py \
     --model configs/model/swin_tiny.yaml \
-    --preprocessing configs/preprocessing/srad_clahe.yaml \
-    --checkpoint results/checkpoints/swin_tiny__srad_clahe.pt \
+    --preprocessing configs/preprocessing/srad.yaml \
+    --checkpoint results/checkpoints/srad/swin_tiny.pt \
     --mc_passes 50
 
 # Step 7 — Ensemble calibration (two passes)
 python scripts/run_calibration_ensemble.py \
     --model_configs configs/model/swin_tiny.yaml configs/model/convnext_tiny.yaml \
-    --checkpoints results/checkpoints/swin_tiny__srad_clahe.pt \
-                  results/checkpoints/convnext_tiny__srad_clahe.pt \
-    --preprocessing configs/preprocessing/srad_clahe.yaml
+    --checkpoints results/checkpoints/srad/swin_tiny.pt \
+                  results/checkpoints/srad/convnext_tiny.pt \
+    --preprocessing configs/preprocessing/srad.yaml
 ```
 
 ---
@@ -184,7 +184,7 @@ python scripts/preprocess.py \
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--config` | str | **required** | Path to preprocessing config YAML. Use `configs/preprocessing/srad_clahe.yaml` or `gaussian_clahe.yaml` for the v3 ablation. |
+| `--config` | str | **required** | Path to preprocessing config YAML. Use `configs/preprocessing/srad.yaml` or `gauss.yaml` for the v3 ablation. |
 | `--data_dir` | str | **required** | Path to raw dataset directory containing `infected/` and `noninfected/` subdirs. |
 | `--split_seed` | int | `42` | Random seed for the stratified 80/10/10 split. Use the same seed across all preprocess runs to keep splits identical. |
 | `--input_size` | int | `224` | Resize target. All v3 models use 224. The longer side is scaled to this size and the shorter side is letterbox-padded — see the `steps.padding` config key below. |
@@ -221,11 +221,11 @@ splits.
 ```bash
 # v3 ablation: both arms
 python scripts/preprocess.py \
-    --config configs/preprocessing/srad_clahe.yaml \
+    --config configs/preprocessing/srad.yaml \
     --data_dir $DATA_DIR --split_seed 42
 
 python scripts/preprocess.py \
-    --config configs/preprocessing/gaussian_clahe.yaml \
+    --config configs/preprocessing/gauss.yaml \
     --data_dir $DATA_DIR --split_seed 42
 ```
 
@@ -266,7 +266,7 @@ epoch_log.csv            # one row per epoch
 final_metrics.json       # test-set metrics
 training_curve.png       # loss + AUC plots
 best.pt                  # best-by-val-AUC checkpoint
-best__epoch<N>.pt        # rolling-window recent checkpoints
+best_e<N>.pt             # rolling-window recent checkpoints (`<model>_e<epoch>.pt`)
 ```
 
 **Examples**
@@ -275,22 +275,22 @@ best__epoch<N>.pt        # rolling-window recent checkpoints
 # Basic single run
 python scripts/train.py \
     --model configs/model/swin_tiny.yaml \
-    --preprocessing configs/preprocessing/srad_clahe.yaml \
+    --preprocessing configs/preprocessing/srad.yaml \
     --experiment configs/experiment/best_model_xai.yaml
 
 # Run with overridden hyperparameters
 python scripts/train.py \
     --model configs/model/swin_tiny.yaml \
-    --preprocessing configs/preprocessing/srad_clahe.yaml \
+    --preprocessing configs/preprocessing/srad.yaml \
     --experiment configs/experiment/best_model_xai.yaml \
     --set training.lr=5e-4 training.batch_size=16
 
 # Resume from a previous run
 python scripts/train.py \
     --model configs/model/swin_tiny.yaml \
-    --preprocessing configs/preprocessing/srad_clahe.yaml \
+    --preprocessing configs/preprocessing/srad.yaml \
     --experiment configs/experiment/best_model_xai.yaml \
-    --resume results/runs/swin_tiny__srad_clahe__20260518_143200/best.pt
+    --resume results/runs/swin_tiny__srad__20260518_143200/best.pt
 ```
 
 ---
@@ -317,9 +317,6 @@ python scripts/sweep.py --experiment configs/experiment/<name>.yaml
 ```bash
 # Phase 0 ablation: 9 archs × 2 denoising configs = 18 runs
 python scripts/sweep.py --experiment configs/experiment/ablation_18.yaml
-
-# Legacy 54-run sweep (kept for backward compatibility only)
-python scripts/sweep.py --experiment configs/experiment/ablation_legacy_54.yaml
 ```
 
 **Outputs**: `results/<results_dir>/sweep_matrix.csv` containing per-run metrics.
@@ -408,7 +405,7 @@ python scripts/kfold_finalists.py \
     --experiment configs/experiment/kfold_finalists.yaml \
     --finalists results/sweep_hpo/finalists.csv \
     --params_dir results/sweep_hpo/ \
-    --preprocessing srad_clahe \
+    --preprocessing srad \
     --data_dir /path/to/data \
     [--out_dir results/kfold/]
 ```
@@ -418,7 +415,7 @@ python scripts/kfold_finalists.py \
 | `--experiment` | str | **required** | Path to `kfold_finalists.yaml`. Reads `n_folds:`, `training:` block, `seed:`. |
 | `--finalists` | str | **required** | Path to `finalists.csv` (output of `scripts/sweep_hpo.py`). Must have a column named `arch`. |
 | `--params_dir` | str | **required** | Directory containing per-arch `best_params.yaml` files (the `results/sweep_hpo/<arch>/` outputs). |
-| `--preprocessing` | str | `srad_clahe` | Name of the preprocessing config to use. (NOT a path — just the name, looked up under `configs/preprocessing/`. Use the same name as the ablation winner.) |
+| `--preprocessing` | str | `srad` | Name of the preprocessing config to use. (NOT a path — just the name, looked up under `configs/preprocessing/`. Use the same name as the ablation winner.) |
 | `--data_dir` | str | **required** | Path to raw dataset directory (`infected/` + `notinfected/`). |
 | `--out_dir` | str | `results/kfold/` | Output directory. |
 
@@ -429,7 +426,7 @@ python scripts/kfold_finalists.py \
     --experiment configs/experiment/kfold_finalists.yaml \
     --finalists results/sweep_hpo/finalists.csv \
     --params_dir results/sweep_hpo/ \
-    --preprocessing srad_clahe \
+    --preprocessing srad \
     --data_dir $DATA_DIR
 ```
 
@@ -492,12 +489,12 @@ apples.
 ```bash
 python scripts/evaluate_external.py \
     --model configs/model/efficientnet_b0.yaml \
-    --preprocessing configs/preprocessing/srad_clahe.yaml \
-    --checkpoint results/checkpoints/efficientnet_b0__srad_clahe.pt \
+    --preprocessing configs/preprocessing/srad.yaml \
+    --checkpoint results/checkpoints/srad/efficientnet_b0.pt \
     --external_dir /home/farhan/my-projects/pearl/data_external/pcosgen \
     --external_layout pcosgen \
-    --output results/external_validation/pcosgen_srad_clahe.json \
-    --predictions_csv results/external_validation/pcosgen_srad_clahe.csv
+    --output results/external_validation/pcosgen_srad.json \
+    --predictions_csv results/external_validation/pcosgen_srad.csv
 ```
 
 | Flag | Type | Default | Description |
@@ -597,9 +594,9 @@ bin_data_pass2.csv
 ```bash
 python scripts/run_calibration_ensemble.py \
     --model_configs configs/model/swin_tiny.yaml configs/model/convnext_tiny.yaml \
-    --checkpoints results/checkpoints/swin_tiny__srad_clahe.pt \
-                  results/checkpoints/convnext_tiny__srad_clahe.pt \
-    --preprocessing configs/preprocessing/srad_clahe.yaml
+    --checkpoints results/checkpoints/srad/swin_tiny.pt \
+                  results/checkpoints/srad/convnext_tiny.pt \
+    --preprocessing configs/preprocessing/srad.yaml
 ```
 
 ---
@@ -731,7 +728,7 @@ head:
 ### `configs/preprocessing/<name>.yaml`
 
 ```yaml
-name: srad_clahe
+name: srad
 steps:
   resize: true
   clahe: {enabled: true, clip_limit: 2.0, tile_size: [8, 8]}
@@ -754,7 +751,7 @@ augmentation:
     p: 0.2
     sigma_low: 0.1
     sigma_high: 1.5
-output_dir: results/preprocessed/srad_clahe
+output_dir: results/preprocessed/srad
 ```
 
 | Field | Type | Description |
@@ -791,7 +788,7 @@ mode: ablation                    # ablation | sweep | single | sweep_tune | kfo
 models:                            # for sweep.py / sweep_hpo.py
   - resnet50
   - swin_tiny
-preprocessing: [srad_clahe, gaussian_clahe]   # for sweep.py
+preprocessing: [srad, gauss]   # for sweep.py
 finalists: [swin_tiny, convnext_tiny]         # for kfold_finalists
 n_trials_per_arch: 20             # HPO sweep
 top_k_finalists: 3
@@ -892,7 +889,7 @@ run exactly.
 ```bash
 python scripts/train.py \
     --model configs/model/swin_tiny.yaml \
-    --preprocessing configs/preprocessing/srad_clahe.yaml \
+    --preprocessing configs/preprocessing/srad.yaml \
     --experiment configs/experiment/best_model_xai.yaml \
     --resume results/runs/<run_id>/best.pt
 ```
@@ -901,8 +898,8 @@ The trainer picks up at `epoch + 1`, restores RNG so the augmentation
 sequence is reproducible, and the logger **appends** to
 `epoch_log.csv` rather than overwriting.
 
-The checkpoint also stores rolling-window epochs (`__epochN.pt`) — the
-last `keep_last_n` are kept alongside `best.pt`, so SWA can
+The checkpoint also stores rolling-window epochs (`<model>_e<epoch>.pt`)
+— the last `keep_last_n` are kept alongside `best.pt`, so SWA can
 average them later.
 
 ---
@@ -947,7 +944,7 @@ results/
 │       ├── final_metrics.json
 │       ├── training_curve.png
 │       ├── best.pt
-│       └── best__epoch<N>.pt                  # rolling-window
+│       └── <model>_e<N>.pt                    # rolling-window
 ├── sweep_hpo/                                  # Phase 2 (per-arch HPO)
 │   ├── summary.csv
 │   ├── finalists.csv

@@ -4,9 +4,9 @@ CLI entrypoint for MC Dropout uncertainty quantification + referral system.
 
 Usage:
     python scripts/run_uncertainty.py \
-        --model configs/model/efficientnet_b4.yaml \
-        --preprocessing configs/preprocessing/full_ad.yaml \
-        --checkpoint results/checkpoints/efficientnet_b4__full_ad.pt \
+        --model configs/model/swin_tiny.yaml \
+        --preprocessing configs/preprocessing/srad.yaml \
+        --checkpoint results/checkpoints/srad/swin_tiny.pt \
         --mc_passes 50 \
         --entropy_threshold 0.35 \
         --coverage_thresholds 1.0 0.9 0.8 0.7 0.6

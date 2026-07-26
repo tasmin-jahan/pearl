@@ -10,9 +10,9 @@ Generates explanations for 20 samples across 4 groups:
 
 Usage:
     python scripts/run_xai.py \
-        --model configs/model/efficientnet_b4.yaml \
-        --preprocessing configs/preprocessing/full_ad.yaml \
-        --checkpoint results/checkpoints/efficientnet_b4__full_ad.pt \
+        --model configs/model/swin_tiny.yaml \
+        --preprocessing configs/preprocessing/srad.yaml \
+        --checkpoint results/checkpoints/srad/swin_tiny.pt \
         --methods gradcam lrp shap \
         --n_samples 20
 """

@@ -23,11 +23,11 @@ Supported external datasets:
 Usage:
     python scripts/evaluate_external.py \
         --model configs/model/efficientnet_b0.yaml \
-        --preprocessing configs/preprocessing/srad_clahe.yaml \
-        --checkpoint results/checkpoints/efficientnet_b0__srad_clahe.pt \
+        --preprocessing configs/preprocessing/srad.yaml \
+        --checkpoint results/checkpoints/srad/efficientnet_b0.pt \
         --external_dir data_external/pcosgen \
         --external_layout pcosgen \
-        --output results/external_validation/pcosgen_srad.json
+        --output results/external_validation/srad__efficientnet_b0__pcosgen.json
 """
 
 import argparse

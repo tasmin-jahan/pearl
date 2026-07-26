@@ -7,7 +7,7 @@ raw dataset, and saves preprocessed train/val/test splits to disk.
 
 Usage:
     python scripts/preprocess.py \\
-        --config configs/preprocessing/clahe_ad.yaml \\
+        --config configs/preprocessing/srad.yaml \\
         --data_dir /path/to/figshare_raw \\
         --split_seed 42
 """
@@ -56,6 +56,11 @@ def main():
         default=224,
         help="Resize target size (default: 224)",
     )
+    parser.add_argument(
+        "--no_clean",
+        action="store_true",
+        help="Skip clearing the output_dir before writing (preserve old runs).",
+    )
     args = parser.parse_args()
 
     set_seed(args.split_seed)
@@ -65,6 +70,16 @@ def main():
     output_dir = config.get("output_dir", "results/preprocessed/default")
     print(f"[Preprocess] Config: {config['name']}")
     print(f"[Preprocess] Output: {output_dir}")
+
+    # ---- Clean output_dir to avoid stale files from a previous split_seed ----
+    if os.path.isdir(output_dir):
+        if args.no_clean:
+            print(f"[Preprocess] --no_clean set: keeping existing {output_dir}")
+        else:
+            import shutil
+            shutil.rmtree(output_dir)
+            print(f"[Preprocess] Cleared previous {output_dir}")
+    os.makedirs(output_dir, exist_ok=True)
 
     # Get image paths, labels, and patient_ids (group keys)
     image_paths, labels, patient_ids = get_image_paths_and_labels(args.data_dir)
@@ -117,7 +132,46 @@ def main():
         )
         print(f"  {split_name} class counts: {count_str}")
 
-    print(f"\n[Preprocess] Done! Preprocessed data saved to {output_dir}")
+    # ---- Post-run verification (Bug 3 fix) ----
+    # Confirms that the output directory contains exactly the expected
+    # number of .npy files (one per input image, across all three splits)
+    # and that class ratios roughly mirror the input. If split_seed was
+    # changed between runs, this catches leftover stale files in adjacent
+    # split folders.
+    print(f"\n[Preprocess] Verifying output...")
+    expected_total = len(image_paths)
+    actual_total = 0
+    class_counts = {"train": {0: 0, 1: 0}, "val": {0: 0, 1: 0}, "test": {0: 0, 1: 0}}
+    for split_name in ("train", "val", "test"):
+        for cls_name, cls_label in [("infected", 1), ("noninfected", 0)]:
+            cls_dir = os.path.join(output_dir, split_name, cls_name)
+            if not os.path.isdir(cls_dir):
+                continue
+            n = sum(1 for f in os.listdir(cls_dir) if f.endswith(".npy"))
+            actual_total += n
+            class_counts[split_name][cls_label] = n
+    if actual_total != expected_total:
+        print(
+            f"  WARNING: expected {expected_total} files, found {actual_total}."
+        )
+        print(
+            f"  This usually means --no_clean was set or the output_dir had"
+        )
+        print(
+            f"  leftover files from a previous run with a different --split_seed."
+        )
+    else:
+        print(f"  OK: {actual_total} .npy files match expected (one per input image).")
+    print(f"\n  Final split table:")
+    print(f"  {'split':<8} {'noninfected':>14} {'infected':>12} {'ratio':>10}")
+    for split_name in ("train", "val", "test"):
+        n_neg = class_counts[split_name][0]
+        n_pos = class_counts[split_name][1]
+        ratio = f"{n_pos / max(n_neg, 1):.2f}:1" if n_neg > 0 else "—"
+        print(f"  {split_name:<8} {n_neg:>14} {n_pos:>12} {ratio:>10}")
+    print(
+        f"\n[Preprocess] Done! Preprocessed data saved to {output_dir}"
+    )
 
 
 if __name__ == "__main__":

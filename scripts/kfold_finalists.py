@@ -12,7 +12,7 @@ Usage:
         --experiment configs/experiment/kfold_finalists.yaml \
         --finalists results/sweep_hpo/finalists.csv \
         --params_dir results/sweep_hpo/ \
-        --preprocessing srad_clahe
+        --preprocessing srad
 """
 
 import argparse
@@ -132,7 +132,7 @@ def main():
     parser.add_argument("--experiment", type=str, required=True)
     parser.add_argument("--finalists", type=str, required=True)
     parser.add_argument("--params_dir", type=str, required=True)
-    parser.add_argument("--preprocessing", type=str, default="srad_clahe")
+    parser.add_argument("--preprocessing", type=str, default="srad")
     parser.add_argument("--data_dir", type=str, required=True)
     parser.add_argument("--out_dir", type=str, default="results/kfold/")
     args = parser.parse_args()

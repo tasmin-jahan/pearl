@@ -68,7 +68,7 @@ def run_swa_on_recent(
 ) -> nn.Module:
     """Average the most recent ``keep_last_n`` numbered checkpoints.
 
-    Looks for files matching ``{checkpoint_path_stem}__epoch*.pt`` in
+    Looks for files matching ``{checkpoint_path_stem}_e*.pt`` in
     the same directory as ``checkpoint_path``.
 
     Args:
@@ -82,7 +82,7 @@ def run_swa_on_recent(
     """
     base_dir = os.path.dirname(checkpoint_path)
     prefix = os.path.splitext(os.path.basename(checkpoint_path))[0]
-    pattern = os.path.join(base_dir, f"{prefix}__epoch*.pt")
+    pattern = os.path.join(base_dir, f"{prefix}_e*.pt")
     paths = sorted(glob.glob(pattern), key=os.path.getmtime)
     paths = paths[-keep_last_n:]
     if not paths:

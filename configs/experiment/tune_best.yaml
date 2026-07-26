@@ -3,7 +3,7 @@ name: tune_best_model
 # roster. This config tunes one specific architecture; for the full
 # sweep use tune_per_arch.yaml.
 model: swin_tiny
-preprocessing: srad_clahe
+preprocessing: srad
 n_trials: 50
 direction: maximize
 metric: val_auc

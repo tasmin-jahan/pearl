@@ -1,4 +1,4 @@
-name: gaussian_clahe
+name: gauss
 steps:
   resize: true
   clahe:
@@ -31,4 +31,4 @@ augmentation:
     p: 0.2
     sigma_low: 0.1
     sigma_high: 1.5
-output_dir: results/preprocessed/gaussian_clahe
+output_dir: results/preprocessed/gauss
