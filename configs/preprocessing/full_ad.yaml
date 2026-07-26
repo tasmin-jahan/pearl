@@ -21,4 +21,14 @@ augmentation:
   rotation: 15
   horizontal_flip: true
   scale: 0.1
+  jpeg_compression:
+    enabled: true
+    p: 0.3
+    q_low: 50
+    q_high: 95
+  light_blur:
+    enabled: true
+    p: 0.2
+    sigma_low: 0.1
+    sigma_high: 1.5
 output_dir: results/preprocessed/full_ad

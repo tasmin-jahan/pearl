@@ -18,7 +18,11 @@ Two denoising options are supported for the diffusion step:
     of variation; correct for ultrasound's multiplicative, signal-dependent
     speckle). This is the recommended denoiser for ultrasound.
 
-Also handles data augmentation (rotation, flip, scale) at training time.
+Also handles data augmentation (rotation, flip, scale, JPEG-style compression,
+light blur) at training time. The JPEG-style and blur augmentations address
+the heavy JPEG compression (~q40) present in the source dataset: they teach
+the model to be invariant to residual codec artefacts without destroying the
+already-den-and-CLAHE-preprocessed signal.
 """
 
 import cv2
@@ -51,6 +55,23 @@ class Preprocessor:
         #   "constant" — letterbox, pad with the configured pad_value.
         self.padding = self.steps.get("padding", "reflect").lower()
         self.pad_value = int(self.steps.get("pad_value", 0))
+
+        # Noise-robustness augmentations: applied on top of the preprocessed
+        # image at training time to make the model invariant to the JPEG codec
+        # noise already present in the source dataset (94.5% of images are at
+        # estimated q <= 60; median q ~ 40). Both default to disabled; the
+        # v3 ablation YAMLs enable them at low probability.
+        jpeg_aug_cfg = self.aug_config.get("jpeg_compression", {}) or {}
+        self.jpeg_aug_enabled = bool(jpeg_aug_cfg.get("enabled", False))
+        self.jpeg_aug_prob = float(jpeg_aug_cfg.get("p", 0.3))
+        self.jpeg_aug_q_low = int(jpeg_aug_cfg.get("q_low", 50))
+        self.jpeg_aug_q_high = int(jpeg_aug_cfg.get("q_high", 95))
+
+        blur_aug_cfg = self.aug_config.get("light_blur", {}) or {}
+        self.blur_aug_enabled = bool(blur_aug_cfg.get("enabled", False))
+        self.blur_aug_prob = float(blur_aug_cfg.get("p", 0.2))
+        self.blur_aug_sigma_low = float(blur_aug_cfg.get("sigma_low", 0.1))
+        self.blur_aug_sigma_high = float(blur_aug_cfg.get("sigma_high", 1.5))
 
     def _resize_with_padding(self, image: np.ndarray) -> np.ndarray:
         """Aspect-preserving resize + letterbox pad.
@@ -328,9 +349,17 @@ class Preprocessor:
           - Random rotation ±rotation degrees
           - Random horizontal flip
           - Random scale ±scale fraction
+          - JPEG-style compression artefact (with probability ``p``)
+          - Light Gaussian blur (with probability ``p``)
+
+        The two noise-robustness augmentations are applied LAST so the
+        geometric augmentations (rotation/flip/scale) operate on the same
+        content the loss function will see. Both are off by default and
+        must be enabled explicitly under ``augmentation.jpeg_compression``
+        and ``augmentation.light_blur`` in the YAML.
 
         Args:
-            image: HxWxC float32 image.
+            image: HxWxC float32 image (already preprocessed: SRAD/CLAHE/zscore).
 
         Returns:
             Augmented image.
@@ -361,7 +390,71 @@ class Preprocessor:
                 image, M, (w, h), borderMode=cv2.BORDER_REFLECT_101
             )
 
+        # JPEG-style compression artefact (noise-robustness augmentation).
+        # The input is float32 (z-scored). We quantize to 8-bit, re-encode
+        # at a random quality in [q_low, q_high], then return to float.
+        # This simulates the family of codec artefacts the source dataset
+        # already exhibits (q ~ 40), so the model becomes invariant to it.
+        if self.jpeg_aug_enabled and np.random.random() < self.jpeg_aug_prob:
+            image = self._apply_jpeg_augmentation(image)
+
+        # Light Gaussian blur (noise-robustness augmentation).
+        # Suppresses JPEG ringing (1-2 px radius) without erasing the
+        # anatomical edge signal that survives compression (5-20 px radius).
+        if self.blur_aug_enabled and np.random.random() < self.blur_aug_prob:
+            image = self._apply_blur_augmentation(image)
+
         return image
+
+    def _apply_jpeg_augmentation(self, image: np.ndarray) -> np.ndarray:
+        """Simulate JPEG compression on a preprocessed float32 image.
+
+        The flow is:
+          float32 (any range) → clip+quantize to uint8 → cv2.imencode JPEG
+          at random quality → cv2.imdecode → cast back to float32.
+
+        This operates on the post-zscore values; the round-trip is intended
+        to inject the same kind of codec artefacts the raw images have, not
+        to be physically meaningful as compression of a normalized tensor.
+
+        Args:
+            image: HxWxC float32 image.
+
+        Returns:
+            Same-shape float32 image with simulated JPEG artefacts.
+        """
+        q = np.random.randint(self.jpeg_aug_q_low, self.jpeg_aug_q_high + 1)
+        # Clip to a finite range; z-scored images are usually in [-3, 3],
+        # but cv2.imencode expects 8-bit pixel values.
+        clipped = np.clip(image, 0.0, 255.0).astype(np.uint8)
+        ok, buf = cv2.imencode(
+            ".jpg", clipped,
+            [int(cv2.IMWRITE_JPEG_QUALITY), int(q)],
+        )
+        if not ok:
+            return image  # fail-safe: return unchanged
+        decoded = cv2.imdecode(buf, cv2.IMREAD_UNCHANGED)
+        if decoded is None:
+            return image
+        if decoded.dtype != np.float32:
+            decoded = decoded.astype(np.float32)
+        return decoded
+
+    def _apply_blur_augmentation(self, image: np.ndarray) -> np.ndarray:
+        """Apply light Gaussian blur to a preprocessed image.
+
+        Args:
+            image: HxWxC float32 image.
+
+        Returns:
+            Blurred image, same shape and dtype.
+        """
+        sigma = float(np.random.uniform(
+            self.blur_aug_sigma_low, self.blur_aug_sigma_high,
+        ))
+        # Kernel size derived from sigma; must be odd and >= 3.
+        ksize = max(3, int(np.ceil(sigma * 6)) | 1)
+        return cv2.GaussianBlur(image, (ksize, ksize), sigma)
 
 
 # ------------------------------------------------------------------

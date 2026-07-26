@@ -351,6 +351,42 @@ $(0.485, 0.456, 0.406)$ and divides by the standard deviations
 $(0.229, 0.224, 0.225)$. This is a one-line correctness check that
 incurred no ablation cost.
 
+\subsection{Noise-robustness augmentation (v3.2)}
+
+The source dataset is heavily compressed by a lossy JPEG codec. We
+parsed the quantisation tables of every image to obtain an estimated
+quality factor; the median was $q \approx 40$, and $94.5\%$ of
+images are at $q \leq 60$. Once image data has been compressed at
+this level, the high-frequency DCT coefficients used to encode fine
+textural detail are no longer recoverable. SRAD and CLAHE remove the
+residual speckle and intensity inhomogeneity, but they cannot recover
+the missing frequency content. We therefore augment the training data
+with two operations that target the codec noise without conflicting
+with the preprocessing pipeline:
+
+\begin{itemize}
+    \item \textbf{JPEG re-compression}. With probability $p = 0.3$
+    per training sample, the (already preprocessed) image is
+    quantised to 8-bit, re-encoded through \texttt{cv2.imencode} at a
+    random quality $q \in [50, 95]$, and decoded back to float32.
+    This simulates the family of codec artefacts the source data
+    already exhibits, so the trained model is invariant to encoder
+    choice at inference time.
+    \item \textbf{Light Gaussian blur}. With probability $p = 0.2$
+    per training sample, a Gaussian blur with $\sigma \in [0.1, 1.5]$
+    is applied. The blur kernel is sized at $\lceil 6\sigma \rceil$
+    pixels (odd). This suppresses JPEG ringing at the 1--2 pixel
+    scale while leaving intact the anatomical edges that span
+    5--20 pixels.
+\end{itemize}
+
+Both augmentations are stochastic and applied \emph{at training time
+only}, after the preprocessor writes \texttt{.npy} files to disk.
+Validation and test splits receive un-augmented inputs only. The
+augmentations are configured under \texttt{augmentation.jpeg\_compression}
+and \texttt{augmentation.light\_blur} in every preprocessing YAML and
+are enabled by default in the v3 ablation configs.
+
 % =====================================================================
 \section{Model architecture}
 % =====================================================================

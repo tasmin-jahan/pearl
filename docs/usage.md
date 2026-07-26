@@ -56,7 +56,7 @@ pip install -r requirements.txt
 ```
 data/
   infected/        # PCOS (label=1, 6784 images)
-  notinfected/     # non-PCOS (label=0, 5000 images)
+  noninfected/     # non-PCOS (label=0, 5000 images)
 ```
 
 Set `DATA_DIR=/path/to/data` for the commands below.
@@ -209,14 +209,12 @@ val/infected/*.npy
 val/noninfected/*.npy
 ```
 
-**Outputs** under `results/preprocessed/<config_name>/`:
-
-```
-train/infected/*.npy        test/infected/*.npy
-train/notinfected/*.npy     test/notinfected/*.npy
-val/infected/*.npy
-val/notinfected/*.npy
-```
+**Augmentation**: the noise-robustness augmentations declared in the
+YAML (`augmentation.jpeg_compression`, `augmentation.light_blur`) are
+applied at *training time only*, inside the data loader, after the
+preprocessed `.npy` array has been loaded. They never modify the
+on-disk preprocessed artefacts and never run on validation or test
+splits.
 
 **Examples**
 
@@ -688,24 +686,47 @@ steps:
   srad: {enabled: true, iterations: 20, kappa: 30, gamma: 0.1}
   anisotropic_diffusion: {enabled: false}
   zscore_normalize: {enabled: true}
+  padding: reflect                   # letterbox mode: reflect | constant | none
 augmentation:
   rotation: 15
   horizontal_flip: true
   scale: 0.10
+  jpeg_compression:                  # noise-robustness augmentation
+    enabled: true
+    p: 0.3
+    q_low: 50
+    q_high: 95
+  light_blur:                        # noise-robustness augmentation
+    enabled: true
+    p: 0.2
+    sigma_low: 0.1
+    sigma_high: 1.5
 output_dir: results/preprocessed/srad_clahe
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `name` | str | Config name. Used as output dir suffix. |
-| `steps.resize` | bool | Bicubic resize to `input_size`. |
+| `steps.resize` | bool | Bicubic resize to `input_size` (default `224`). |
+| `steps.padding` | str | Letterbox mode: `reflect` (default), `constant`, or `none` (legacy stretch). |
 | `steps.clahe.{enabled, clip_limit, tile_size}` | bool/float/[int,int] | CLAHE. Fixed at `clip_limit=2.0, tile_size=[8,8]` in v3. |
 | `steps.gaussian.{enabled, sigma}` | bool/float | Gaussian blur. `sigma=1.0` for the v3 ablation arm. |
 | `steps.srad.{enabled, iterations, kappa, gamma}` | bool/int/float/float | SRAD denoising. Default `(20, 30, 0.1)`. |
 | `steps.anisotropic_diffusion.{enabled, ...}` | bool | Generic Perona–Malik AD. **Not used in v3** (legacy kept for backward compatibility). |
 | `steps.zscore_normalize.enabled` | bool | Per-channel z-score. |
-| `augmentation.{rotation, horizontal_flip, scale}` | float/bool/float | Applied at training time only. |
+| `augmentation.{rotation, horizontal_flip, scale}` | float/bool/float | Geometric augmentation, applied at training time only. |
+| `augmentation.jpeg_compression.{enabled, p, q_low, q_high}` | bool/float/int/int | Simulates JPEG codec artefacts (random q in `[q_low, q_high]`) with probability `p`. Targets the ~q40 compression already present in the dataset. |
+| `augmentation.light_blur.{enabled, p, sigma_low, sigma_high}` | bool/float/float/float | Light Gaussian blur (sigma in range) with probability `p`. Suppresses JPEG ringing without erasing anatomical edges. |
 | `output_dir` | str | Where `.npy` files are saved. |
+
+#### Noise-robustness augmentation rationale
+
+The source dataset is heavily compressed (94.5% of images at estimated q ≤ 60, median ~q40). Preprocessing (SRAD + CLAHE) removes speckle and normalizes contrast but cannot remove codec artefacts because they have already destroyed the high-frequency DCT coefficients. Two augmentations address this:
+
+- **JPEG re-compression** (`jpeg_compression`): randomly re-encode the training image at a fresh JPEG quality. Teaches the model to be invariant to the family of codec artefacts, not just one specific instance.
+- **Light blur** (`light_blur`): sigma in [0.1, 1.5] suppresses JPEG ringing (1–2 px radius) without erasing anatomical edges (5–20 px radius).
+
+Both are disabled by default. The v3 ablation YAMLs enable them at low probability (`p=0.3`, `p=0.2`) so the model is robust without losing signal.
 
 ### `configs/experiment/<name>.yaml`
 
