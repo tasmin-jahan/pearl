@@ -1,0 +1,85 @@
+model:
+  name: resnet50
+  timm_name: resnet50
+  input_size: 224
+  pretrained: true
+  num_classes: 2
+  freeze_fraction: 0.6
+  head:
+    hidden_dim: 256
+    dropout: 0.5
+preprocessing:
+  name: srad
+  steps:
+    resize: true
+    clahe:
+      enabled: true
+      clip_limit: 2.0
+      tile_size:
+      - 8
+      - 8
+    gaussian:
+      enabled: false
+    srad:
+      enabled: true
+      iterations: 20
+      kappa: 30
+      gamma: 0.1
+    anisotropic_diffusion:
+      enabled: false
+    zscore_normalize:
+      enabled: true
+    padding: reflect
+  augmentation:
+    rotation: 15
+    horizontal_flip: true
+    scale: 0.1
+    jpeg_compression:
+      enabled: true
+      p: 0.3
+      q_low: 50
+      q_high: 95
+    light_blur:
+      enabled: true
+      p: 0.2
+      sigma_low: 0.1
+      sigma_high: 1.5
+  output_dir: results/preprocessed/srad
+experiment:
+  name: preprocessing_ablation_18
+  mode: ablation
+  preprocessing:
+  - srad
+  - gauss
+  models:
+  - resnet50
+  - resnet101
+  - densenet121
+  - densenet169
+  - efficientnet_b0
+  - convnext_tiny
+  - mobilenetv3_large
+  - vit_base
+  - swin_tiny
+  training:
+    optimizer: adamw
+    lr: 0.0001
+    weight_decay: 0.01
+    beta1: 0.9
+    beta2: 0.999
+    eps: 1.0e-08
+    scheduler: cosine_annealing
+    batch_size: 32
+    max_epochs: 100
+    early_stopping_patience: 20
+    warmup_epochs: 2
+    freeze_epochs: 1
+    monitor: val_auc
+    bf16: true
+    channels_last: true
+    grad_clip_norm: 1.0
+    ema: true
+    sampler: weighted
+  seed: 42
+  results_dir: results/ablation/
+seed: 42

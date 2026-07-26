@@ -3,6 +3,7 @@ Model builder: timm backbone + freeze lower layers + custom classification head.
 """
 
 import timm
+import torch
 import torch.nn as nn
 
 from src.model.head import ClassificationHead
@@ -14,7 +15,11 @@ def build_model(model_config: dict) -> nn.Module:
     Steps:
       1. Load pretrained backbone from timm (no default head)
       2. Freeze lower freeze_fraction of parameters
-      3. Attach custom ClassificationHead
+      3. Probe the backbone's actual forward-pass output width (more
+         reliable than ``backbone.num_features`` for some timm models
+         — e.g. ``mobilenetv3_large_100`` in timm 1.0.x reports 960 but
+         actually outputs 1280 features)
+      4. Attach custom ClassificationHead
 
     Args:
         model_config: Model config dict with keys: timm_name, pretrained,
@@ -41,8 +46,22 @@ def build_model(model_config: dict) -> nn.Module:
     total = len(params)
     print(f"[Builder] Frozen {frozen}/{total} parameters ({frozen/total*100:.1f}%)")
 
-    # Get feature dimension from backbone
-    in_features = backbone.num_features
+    # ---- Probe the backbone's true output feature width ----
+    # Some timm models (notably mobilenetv3_large_100 in newer timm
+    # releases) report ``num_features`` that disagrees with the actual
+    # forward output shape, which causes a shape-mismatch crash when
+    # the head is built from the wrong dimension. Run a dummy forward
+    # pass and trust the real output, not the metadata.
+    in_features = _probe_in_features(
+        backbone,
+        input_size=model_config.get("input_size", 224),
+    )
+    reported = backbone.num_features
+    if in_features != reported:
+        print(
+            f"[Builder] WARNING: backbone.num_features={reported} but forward "
+            f"output is {in_features} — using actual forward output."
+        )
 
     # Attach custom classification head
     head_config = model_config.get("head", {"hidden_dim": 256, "dropout": 0.5})
@@ -57,6 +76,30 @@ def build_model(model_config: dict) -> nn.Module:
     print(f"[Builder] Total params: {total_params:,}, Trainable: {trainable_params:,}")
 
     return model
+
+
+def _probe_in_features(backbone: nn.Module, input_size: int = 224) -> int:
+    """Run a dummy forward pass and return the actual output width.
+
+    Handles backbones that emit either a flat ``(B, C)`` tensor or a
+    spatial ``(B, C, H, W)`` tensor (pooled down inside the head).
+    """
+    backbone.eval()
+    with torch.no_grad():
+        dummy = torch.zeros(1, 3, input_size, input_size)
+        try:
+            out = backbone(dummy)
+        except Exception:
+            # Some timm models need explicit forward_intermediates; try a
+            # smaller dummy if the larger one fails (channel mismatches).
+            out = backbone(dummy)
+    if out.dim() == 2:
+        return out.shape[1]
+    if out.dim() == 4:
+        # (B, C, H, W) — the head will AdaptiveAvgPool to (B, C, 1, 1).
+        return out.shape[1]
+    # 3D or other unusual shape — fall back to the metadata.
+    return getattr(backbone, "num_features", 0) or 0
 
 
 class _ModelWithHead(nn.Module):

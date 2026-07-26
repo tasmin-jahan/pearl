@@ -22,7 +22,7 @@ from src.utils.logging import ExperimentLogger, make_arch_dir
 from src.data.dataloader import build_dataloaders
 from src.model.builder import build_model
 from src.training.losses import build_weighted_loss
-from src.training.trainer import Trainer
+from src.training.trainer import Trainer, set_outer_live_active
 
 # Rich UI for the sweep outer loop (ETA dashboard + summary table).
 try:
@@ -184,6 +184,10 @@ def main():
             refresh_per_second=4, transient=False,
         )
         outer_live.__enter__()
+        # Tell the trainer that an outer Rich Live is now active so it
+        # does NOT open its own nested Live (which would cause terminal
+        # jitter from two contexts fighting for cursor control).
+        set_outer_live_active(True)
 
     for model_name in models:
         model_config_path = os.path.join("configs", "model", f"{model_name}.yaml")
@@ -193,6 +197,22 @@ def main():
             run_idx += 1
             preproc_config_path = os.path.join("configs", "preprocessing", f"{preproc_name}.yaml")
             preproc_config = load_config(preproc_config_path)
+
+            # Skip already-completed runs so a resumed sweep doesn't
+            # re-train the architectures that finished in a previous
+            # crashed session. The presence of ``best.pt`` is the
+            # single source of truth for "this run is done".
+            arch_dir = make_arch_dir(results_dir, preproc_name, model_name)
+            existing_ckpt = os.path.join(arch_dir, "best.pt")
+            if os.path.isfile(existing_ckpt):
+                if outer_progress is not None and outer_task is not None:
+                    outer_progress.update(
+                        outer_task, advance=1,
+                        description=f"[{model_name} + {preproc_name}] | skipping (best.pt exists)",
+                    )
+                elif not use_rich:
+                    print(f"[Sweep] Run {run_idx}/{total_runs}: {model_name} + {preproc_name} — skipping (best.pt exists)")
+                continue
 
             if outer_progress is not None and outer_task is not None:
                 # Update ETA estimate: average across runs seen so far.
@@ -216,7 +236,7 @@ def main():
             set_seed(seed)
 
             # Per-(prep, arch) directory — holds all artifacts for this run.
-            arch_dir = make_arch_dir(results_dir, preproc_name, model_name)
+            # (arch_dir was already computed above for the skip check.)
             checkpoint_path = os.path.join(arch_dir, "best.pt")
             full_config = {
                 "model": model_config,
@@ -267,6 +287,7 @@ def main():
 
     # Close the outer Live context.
     if outer_live is not None:
+        set_outer_live_active(False)
         outer_live.__exit__(None, None, None)
 
     # Build sweep matrix CSV

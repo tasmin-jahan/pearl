@@ -64,6 +64,31 @@ def _rich_supported() -> bool:
     return True
 
 
+# Module-level handshake for nested Live contexts. The sweep.py outer
+# loop sets ``_OUTER_LIVE_ACTIVE = True`` before entering its Live
+# context and resets it on exit. The trainer checks this flag at
+# __init__ time to avoid opening an inner Live that would jitter
+# against the outer one. Callers wanting to opt back in (rare) can
+# pass ``config={"use_inner_live": True}``.
+_OUTER_LIVE_ACTIVE = False
+
+
+def set_outer_live_active(active: bool) -> None:
+    """Toggle the module-level outer-Live-active flag.
+
+    Sweep scripts call ``set_outer_live_active(True)`` before entering
+    their Rich ``Live`` context manager, and ``set_outer_live_active(False)``
+    on exit. Trainer instances created while this flag is True skip
+    their own per-epoch Live and fall back to plain console.print().
+    """
+    global _OUTER_LIVE_ACTIVE
+    _OUTER_LIVE_ACTIVE = active
+
+
+def _outer_live_active() -> bool:
+    return _OUTER_LIVE_ACTIVE
+
+
 class TrialDivergedError(RuntimeError):
     """Raised when loss/grad-norm goes non-finite mid-training.
 
@@ -236,6 +261,18 @@ class Trainer:
         # ---- Rich console (created lazily; reused across epochs) ----
         self._console = Console() if _rich_supported() else None
 
+        # ---- Inner Live control ----
+        # When running inside an outer Rich Live context (e.g. the
+        # sweep.py outer loop), nested Live contexts cause terminal
+        # jitter because both fight for the cursor. Callers can either:
+        #   (a) pass ``silent=True`` (no per-epoch printing at all), or
+        #   (b) pass ``use_inner_live=False`` to fall back to plain
+        #       ``console.print()`` of the epoch panel — which renders
+        #       cleanly even when an outer Live is wrapping the sweep.
+        self._use_inner_live = not (
+            self.silent or _outer_live_active() or not config.get("use_inner_live", True)
+        )
+
     # ------------------------------------------------------------------
     # Optimizer with no-decay param groups
     # ------------------------------------------------------------------
@@ -397,11 +434,14 @@ class Trainer:
                 for pg in self.optimizer.param_groups:
                     pg["lr"] = warmup_lr
 
-            # Rich Live progress for the whole epoch (train + validate)
+            # Rich Live progress for the whole epoch (train + validate).
+            # Skip the inner Live if either the caller is silent OR an
+            # outer Rich Live is already running (e.g. sweep.py) — nested
+            # Lives cause terminal jitter.
             train_progress = None
             live_ctx = None
             epoch_table = None
-            if use_rich:
+            if use_rich and self._use_inner_live:
                 train_progress = Progress(
                     SpinnerColumn(),
                     TextColumn(f"[bold cyan]E{epoch:03d}"),
@@ -432,6 +472,13 @@ class Trainer:
                 self._live_ctx = None
                 self._train_progress = None
                 self._train_task = None
+                # If rich is available but inner Live is disabled, log
+                # a one-line per-epoch progress hint so the user still
+                # sees something moving in the terminal.
+                if use_rich and not self.silent and self._console is not None:
+                    self._console.print(
+                        f"[bold cyan]E{epoch:03d}[/] training {len(self.train_loader)} batches…"
+                    )
 
             try:
                 train_loss, train_acc = self._train_one_epoch(epoch)
@@ -467,6 +514,17 @@ class Trainer:
                 epoch_table.add_row(panel)
                 live_ctx.__exit__(None, None, None)
                 self._live_ctx = None
+            elif use_rich and live_ctx is None and not self.silent and self._console is not None:
+                # Inner Live is disabled (e.g. running under an outer Live
+                # from sweep.py). Print the same panel as a static block
+                # — no cursor-racing, no jitter.
+                panel = self._render_epoch_panel(
+                    epoch, train_loss, train_acc,
+                    val_loss, val_acc, val_auc, val_f1, val_mcc,
+                    current_lr, epoch_time,
+                    epochs_without_improvement=self.epochs_without_improvement,
+                )
+                self._console.print(panel)
 
             self.logger.log_epoch(
                 epoch, train_loss, val_loss,
