@@ -1,0 +1,24 @@
+{
+  "arch": "convnext_tiny",
+  "preprocessing": "gauss_nopad",
+  "n_samples": 80,
+  "n_correct": 79,
+  "n_per_class": {
+    "1": 40,
+    "0": 40
+  },
+  "border_mass_frac_median": {
+    "1": 0.0753363103735542,
+    "0": 0.020954920815160677
+  },
+  "border_mass_frac_mean": {
+    "1": 0.09326548422649719,
+    "0": 0.03827529303775733
+  },
+  "border_peak_count": {
+    "1": 15,
+    "0": 4
+  },
+  "expected_border_uniform_frac": 0.18678252551020408,
+  "border_frac": 0.05
+}

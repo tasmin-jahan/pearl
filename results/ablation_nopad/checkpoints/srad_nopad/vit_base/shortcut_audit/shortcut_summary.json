@@ -1,0 +1,24 @@
+{
+  "arch": "vit_base",
+  "preprocessing": "srad_nopad",
+  "n_samples": 80,
+  "n_correct": 78,
+  "n_per_class": {
+    "1": 40,
+    "0": 40
+  },
+  "border_mass_frac_median": {
+    "1": 0.0,
+    "0": 0.0
+  },
+  "border_mass_frac_mean": {
+    "1": 0.0,
+    "0": 0.0
+  },
+  "border_peak_count": {
+    "1": 40,
+    "0": 40
+  },
+  "expected_border_uniform_frac": 0.18678252551020408,
+  "border_frac": 0.05
+}

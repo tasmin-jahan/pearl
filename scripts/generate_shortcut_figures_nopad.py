@@ -37,29 +37,39 @@ def main():
     gray = load('results/ablation_nopad_gray')
 
     arches = sorted(set(base) | set(new) | set(gray))
-    base_per = [np.mean([v for _, v in base.get(a, [])]) for a in arches]
-    new_per  = [np.mean([v for _, v in new.get(a,  [])]) for a in arches]
-    gray_per = [np.mean([v for _, v in gray.get(a, [])]) for a in arches]
 
-    fig, ax = plt.subplots(figsize=(13, 4.8))
+    def stats(d):
+        means, stds, ns = [], [], []
+        for a in arches:
+            vals = [v for _, v in d.get(a, [])]
+            means.append(np.mean(vals) if vals else np.nan)
+            stds.append(np.std(vals, ddof=0) if vals else 0.0)
+            ns.append(len(vals))
+        return np.array(means), np.array(stds), ns
+
+    base_m, base_s, base_n = stats(base)
+    new_m,  new_s,  new_n  = stats(new)
+    gray_m, gray_s, gray_n = stats(gray)
+
+    fig, ax = plt.subplots(figsize=(13, 5.0))
     x = np.arange(len(arches))
     w = 0.28
-    ax.bar(x - w, base_per, w, color='#a6d96a', label='reflect-padding (baseline)',
-           edgecolor='gray', linewidth=0.6)
-    ax.bar(x,     new_per,  w, color='#d73027', label='no-padding',
-           edgecolor='gray', linewidth=0.6)
-    ax.bar(x + w, gray_per, w, color='#4575b4', label='no-padding + greyscale',
-           edgecolor='gray', linewidth=0.6)
-    for i, (b, n, g) in enumerate(zip(base_per, new_per, gray_per)):
-        ax.text(i - w, b + 0.005, f"{b:.2f}", ha='center', fontsize=7, color='#3a6f3a')
-        ax.text(i,     n + 0.005, f"{n:.2f}", ha='center', fontsize=7, color='#7a1f1f')
-        ax.text(i + w, g + 0.005, f"{g:.2f}", ha='center', fontsize=7, color='#1a3a6f')
+    def draw_bar(off, m, s, color, label):
+        b = ax.bar(x + off, m, w, color=color, edgecolor='gray', linewidth=0.6,
+                   label=label, yerr=s, ecolor='#333', capsize=3, error_kw={'lw': 0.8})
+        for i, (v, e) in enumerate(zip(m, s)):
+            ax.text(x[i] + off, max(v, 0) + (e if not np.isnan(e) else 0) + 0.005,
+                    f"{v:.2f}", ha='center', fontsize=7)
+    draw_bar(-w, base_m, base_s, '#a6d96a', 'reflect-padding (baseline)')
+    draw_bar(  0, new_m,  new_s,  '#d73027', 'no-padding')
+    draw_bar( w, gray_m, gray_s, '#4575b4', 'no-padding + greyscale')
+
     ax.axhline(0.5, linestyle=':', color='gray', linewidth=1, label='chance (0.5)')
     ax.set_xticks(x); ax.set_xticklabels(arches, rotation=20, ha='right', fontsize=9)
     ax.set_ylabel('PCOSgen external ROC-AUC')
     ax.set_ylim(0.35, 0.95)
     ax.set_title('Removing the letterbox border recovers external AUC by +0.25 mean; '
-                 'greyscale adds no further benefit')
+                 'greyscale adds no further benefit (mean ± std over srad / gauss)')
     for s in ('top', 'right'):
         ax.spines[s].set_visible(False)
     ax.legend(loc='upper left', fontsize=9, frameon=False, ncol=2)

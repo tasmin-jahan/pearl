@@ -1,0 +1,24 @@
+{
+  "arch": "resnet50",
+  "preprocessing": "srad_nopad",
+  "n_samples": 80,
+  "n_correct": 76,
+  "n_per_class": {
+    "1": 40,
+    "0": 40
+  },
+  "border_mass_frac_median": {
+    "1": 0.11743004687782566,
+    "0": 0.09915863425531075
+  },
+  "border_mass_frac_mean": {
+    "1": 0.13165259185338854,
+    "0": 0.1259359702202314
+  },
+  "border_peak_count": {
+    "1": 6,
+    "0": 4
+  },
+  "expected_border_uniform_frac": 0.18678252551020408,
+  "border_frac": 0.05
+}

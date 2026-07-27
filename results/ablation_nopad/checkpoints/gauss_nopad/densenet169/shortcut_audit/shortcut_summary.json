@@ -1,0 +1,21 @@
+{
+  "arch": "densenet169",
+  "preprocessing": "gauss_nopad",
+  "n_samples": 80,
+  "n_correct": 79,
+  "n_per_class": {
+    "1": 40,
+    "0": 40
+  },
+  "border_mass_frac_median": {
+    "1": 0.1437461093274512,
+    "0": 0.12467735714033965
+  },
+  "border_mass_frac_mean": {
+    "1": 0.14601016668034797,
+    "0": 0.1297933831153811
+  },
+  "border_peak_count": {},
+  "expected_border_uniform_frac": 0.18678252551020408,
+  "border_frac": 0.05
+}

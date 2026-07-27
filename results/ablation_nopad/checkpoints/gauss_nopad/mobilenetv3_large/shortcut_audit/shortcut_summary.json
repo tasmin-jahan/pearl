@@ -1,0 +1,24 @@
+{
+  "arch": "mobilenetv3_large",
+  "preprocessing": "gauss_nopad",
+  "n_samples": 80,
+  "n_correct": 77,
+  "n_per_class": {
+    "1": 40,
+    "0": 40
+  },
+  "border_mass_frac_median": {
+    "1": 0.18316842799689703,
+    "0": 0.17300286650258395
+  },
+  "border_mass_frac_mean": {
+    "1": 0.20853891843218983,
+    "0": 0.17942357862292466
+  },
+  "border_peak_count": {
+    "1": 20,
+    "0": 13
+  },
+  "expected_border_uniform_frac": 0.18678252551020408,
+  "border_frac": 0.05
+}
