@@ -1,0 +1,24 @@
+{
+  "arch": "efficientnet_b0",
+  "preprocessing": "gauss",
+  "n_samples": 80,
+  "n_correct": 80,
+  "n_per_class": {
+    "1": 40,
+    "0": 40
+  },
+  "border_mass_frac_median": {
+    "1": 0.2592866953406614,
+    "0": 0.2351691173814121
+  },
+  "border_mass_frac_mean": {
+    "1": 0.2539976834361454,
+    "0": 0.22987417581330205
+  },
+  "border_peak_count": {
+    "1": 35,
+    "0": 21
+  },
+  "expected_border_uniform_frac": 0.18678252551020408,
+  "border_frac": 0.05
+}

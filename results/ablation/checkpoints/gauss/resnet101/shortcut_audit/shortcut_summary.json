@@ -1,0 +1,24 @@
+{
+  "arch": "resnet101",
+  "preprocessing": "gauss",
+  "n_samples": 80,
+  "n_correct": 80,
+  "n_per_class": {
+    "1": 40,
+    "0": 40
+  },
+  "border_mass_frac_median": {
+    "1": 0.0756658222587211,
+    "0": 0.08696741517890014
+  },
+  "border_mass_frac_mean": {
+    "1": 0.08482221442858273,
+    "0": 0.09166000043681519
+  },
+  "border_peak_count": {
+    "0": 2,
+    "1": 4
+  },
+  "expected_border_uniform_frac": 0.18678252551020408,
+  "border_frac": 0.05
+}
