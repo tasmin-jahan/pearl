@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate all matplotlib figures for the analysis section.
 
-All figures are written to docs/analyhsis/figures/ as PNGs at 200 dpi.
+All figures are written to docs/analysis/figures/ as PNGs at 200 dpi.
 This script is idempotent — re-running it overwrites any existing files.
 """
 
@@ -18,7 +18,7 @@ import matplotlib.ticker as mticker
 import numpy as np
 
 
-FIG_DIR = "docs/analyhsis/figures"
+FIG_DIR = "docs/analysis/figures"
 os.makedirs(FIG_DIR, exist_ok=True)
 
 # Consistent style across figures
@@ -661,5 +661,5 @@ fig.savefig(os.path.join(FIG_DIR, "fig18_metric_heatmap.png"), dpi=200, bbox_inc
 plt.close(fig)
 print("✓ fig18_metric_heatmap.png")
 
-print("\nAll figures written to docs/analyhsis/figures/")
+print("\nAll figures written to docs/analysis/figures/")
 print(f"Total: {len([f for f in os.listdir(FIG_DIR) if f.endswith('.png')])} PNGs")

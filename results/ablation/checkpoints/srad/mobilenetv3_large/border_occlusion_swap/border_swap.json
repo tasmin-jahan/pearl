@@ -1,0 +1,14 @@
+{
+  "mode": "border_swap_opposite_class",
+  "border_frac": 0.05,
+  "n_pairs": 81,
+  "clean_inf_p_infected_mean": 0.9830384916729398,
+  "clean_nor_p_infected_mean": 0.02849699988785878,
+  "swapped_inf_p_infected_mean": 0.9452942194026194,
+  "swapped_nor_p_infected_mean": 0.12432437365368744,
+  "delta_inf": -0.0377442722703204,
+  "delta_nor": 0.09582737376582866,
+  "model": "mobilenetv3_large",
+  "preprocessing": "srad",
+  "checkpoint": "results/ablation/checkpoints/srad/mobilenetv3_large/best.pt"
+}

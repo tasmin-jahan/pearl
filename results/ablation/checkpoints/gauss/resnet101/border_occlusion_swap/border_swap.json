@@ -1,0 +1,14 @@
+{
+  "mode": "border_swap_opposite_class",
+  "border_frac": 0.05,
+  "n_pairs": 81,
+  "clean_inf_p_infected_mean": 0.9905267549149784,
+  "clean_nor_p_infected_mean": 0.01495787042931849,
+  "swapped_inf_p_infected_mean": 0.9379831734630797,
+  "swapped_nor_p_infected_mean": 0.11898748190386543,
+  "delta_inf": -0.052543581451898747,
+  "delta_nor": 0.10402961147454694,
+  "model": "resnet101",
+  "preprocessing": "gauss",
+  "checkpoint": "results/ablation/checkpoints/gauss/resnet101/best.pt"
+}

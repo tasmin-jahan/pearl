@@ -1,0 +1,14 @@
+{
+  "mode": "border_swap_opposite_class",
+  "border_frac": 0.05,
+  "n_pairs": 81,
+  "clean_inf_p_infected_mean": 0.9991639926109785,
+  "clean_nor_p_infected_mean": 0.001985303567503981,
+  "swapped_inf_p_infected_mean": 0.9971744631543572,
+  "swapped_nor_p_infected_mean": 0.02644749132076991,
+  "delta_inf": -0.0019895294566213417,
+  "delta_nor": 0.02446218775326593,
+  "model": "convnext_tiny",
+  "preprocessing": "srad",
+  "checkpoint": "results/ablation/checkpoints/srad/convnext_tiny/best.pt"
+}

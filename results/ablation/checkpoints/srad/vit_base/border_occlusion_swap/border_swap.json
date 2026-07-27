@@ -1,0 +1,14 @@
+{
+  "mode": "border_swap_opposite_class",
+  "border_frac": 0.05,
+  "n_pairs": 81,
+  "clean_inf_p_infected_mean": 0.9984415821087214,
+  "clean_nor_p_infected_mean": 0.003284405896808078,
+  "swapped_inf_p_infected_mean": 0.997942782478568,
+  "swapped_nor_p_infected_mean": 0.0876441603342508,
+  "delta_inf": -0.0004987996301533126,
+  "delta_nor": 0.08435975443744273,
+  "model": "vit_base",
+  "preprocessing": "srad",
+  "checkpoint": "results/ablation/checkpoints/srad/vit_base/best.pt"
+}

@@ -1,0 +1,14 @@
+{
+  "mode": "border_swap_opposite_class",
+  "border_frac": 0.05,
+  "n_pairs": 81,
+  "clean_inf_p_infected_mean": 0.9842753520718327,
+  "clean_nor_p_infected_mean": 0.010780582187214383,
+  "swapped_inf_p_infected_mean": 0.9611016659089077,
+  "swapped_nor_p_infected_mean": 0.12918663112860587,
+  "delta_inf": -0.023173686162925033,
+  "delta_nor": 0.11840604894139149,
+  "model": "densenet121",
+  "preprocessing": "srad",
+  "checkpoint": "results/ablation/checkpoints/srad/densenet121/best.pt"
+}

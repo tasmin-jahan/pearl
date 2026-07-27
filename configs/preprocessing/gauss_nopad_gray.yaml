@@ -1,0 +1,42 @@
+name: gauss_nopad_gray
+# Same as gauss_nopad but the post-Gaussian image is collapsed to a single
+# intensity channel (mean across BGR), then broadcast back to 3 channels
+# so the network still sees a 3-channel tensor. Combines the no-padding
+# fix with colour-deconfounded input.
+steps:
+  resize: true
+  padding: none
+  clahe:
+    enabled: true
+    clip_limit: 2.0
+    tile_size:
+    - 8
+    - 8
+  gaussian:
+    enabled: true
+    sigma: 1.0
+  srad:
+    enabled: false
+  anisotropic_diffusion:
+    enabled: false
+  to_grayscale:
+    enabled: true
+    method: mean
+    broadcast_3ch: true
+  zscore_normalize:
+    enabled: true
+augmentation:
+  rotation: 15
+  horizontal_flip: true
+  scale: 0.1
+  jpeg_compression:
+    enabled: true
+    p: 0.3
+    q_low: 50
+    q_high: 95
+  light_blur:
+    enabled: true
+    p: 0.2
+    sigma_low: 0.1
+    sigma_high: 1.5
+output_dir: results/preprocessed/gauss_nopad_gray

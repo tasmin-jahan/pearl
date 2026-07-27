@@ -185,6 +185,15 @@ class Preprocessor:
         # Convert to float32 for z-score
         image = image.astype(np.float32)
 
+        # Step 2.5: Optional greyscale collapse (after denoise, before zscore).
+        # When enabled, channels are averaged into a single intensity map
+        # and then broadcast back to 3 channels so the network still sees
+        # a 3-channel input (most ImageNet-pretrained backbones require
+        # 3-channel tensors; we don't want to fork the model code).
+        gs_cfg = self.steps.get("to_grayscale", {})
+        if gs_cfg.get("enabled", False):
+            image = self._apply_to_grayscale(image, gs_cfg)
+
         # Step 3: Z-score normalization (per channel)
         zscore_cfg = self.steps.get("zscore_normalize", {})
         if zscore_cfg.get("enabled", False):
@@ -301,6 +310,39 @@ class Preprocessor:
         kappa = cfg.get("kappa", 30)
         gamma = cfg.get("gamma", 0.1)
         return _srad(image, niter, kappa, gamma)
+
+    @staticmethod
+    def _apply_to_grayscale(image: np.ndarray, cfg: dict) -> np.ndarray:
+        """Collapse multi-channel image to a single intensity channel, then
+        optionally broadcast back to 3 channels.
+
+        Args:
+            image: HxWxC float32 image (channels are post-denoise, pre-zscore).
+            cfg: ``to_grayscale`` config; ``enabled`` is checked by caller,
+                ``method`` may be "mean" (default) or "luminance"
+                (ITU-R BT.601 weights). ``broadcast_3ch`` defaults to True
+                so pretrained 3-channel backbones still receive 3 channels.
+
+        Returns:
+            HxW or HxW3 float32 image. If broadcast is on, all 3 channels
+            carry the same intensity, which is equivalent to a greyscale
+            input from the network's point of view.
+        """
+        method = cfg.get("method", "mean").lower()
+        broadcast = bool(cfg.get("broadcast_3ch", True))
+
+        if image.ndim == 2:
+            gray = image
+        elif method == "luminance":
+            # ITU-R BT.601 weights on BGR (cv2 ordering).
+            w = np.array([0.114, 0.587, 0.299], dtype=np.float32)
+            gray = image @ w
+        else:
+            gray = image.mean(axis=2)
+
+        if broadcast:
+            gray = np.stack([gray, gray, gray], axis=-1)
+        return gray.astype(np.float32)
 
     @staticmethod
     def _apply_zscore(image: np.ndarray) -> np.ndarray:

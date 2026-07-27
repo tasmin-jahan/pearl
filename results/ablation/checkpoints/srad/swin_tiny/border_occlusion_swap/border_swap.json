@@ -1,0 +1,14 @@
+{
+  "mode": "border_swap_opposite_class",
+  "border_frac": 0.05,
+  "n_pairs": 81,
+  "clean_inf_p_infected_mean": 0.991641272733241,
+  "clean_nor_p_infected_mean": 0.03569943980992208,
+  "swapped_inf_p_infected_mean": 0.9767591379306935,
+  "swapped_nor_p_infected_mean": 0.11172088804758257,
+  "delta_inf": -0.01488213480254752,
+  "delta_nor": 0.0760214482376605,
+  "model": "swin_tiny",
+  "preprocessing": "srad",
+  "checkpoint": "results/ablation/checkpoints/srad/swin_tiny/best.pt"
+}

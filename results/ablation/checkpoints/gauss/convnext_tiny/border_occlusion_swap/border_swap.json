@@ -1,0 +1,14 @@
+{
+  "mode": "border_swap_opposite_class",
+  "border_frac": 0.05,
+  "n_pairs": 81,
+  "clean_inf_p_infected_mean": 0.9995229854995822,
+  "clean_nor_p_infected_mean": 0.0006576039142803185,
+  "swapped_inf_p_infected_mean": 0.9990018024856662,
+  "swapped_nor_p_infected_mean": 0.015602261193792256,
+  "delta_inf": -0.0005211830139160156,
+  "delta_nor": 0.014944657279511938,
+  "model": "convnext_tiny",
+  "preprocessing": "gauss",
+  "checkpoint": "results/ablation/checkpoints/gauss/convnext_tiny/best.pt"
+}

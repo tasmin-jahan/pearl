@@ -1,0 +1,14 @@
+{
+  "mode": "border_swap_opposite_class",
+  "border_frac": 0.05,
+  "n_pairs": 81,
+  "clean_inf_p_infected_mean": 0.9872090728194626,
+  "clean_nor_p_infected_mean": 0.016217546554765216,
+  "swapped_inf_p_infected_mean": 0.9247053122078931,
+  "swapped_nor_p_infected_mean": 0.21216782616209928,
+  "delta_inf": -0.06250376061156948,
+  "delta_nor": 0.19595027960733408,
+  "model": "densenet121",
+  "preprocessing": "gauss",
+  "checkpoint": "results/ablation/checkpoints/gauss/densenet121/best.pt"
+}

@@ -1,0 +1,41 @@
+name: preprocessing_ablation_18_nopad_gray
+# No-padding + greyscale ablation. Combines both fixes from Findings 7-8
+# (drop letterbox padding, drop colour information). If border-shortcut
+# was the cause of the PCOSgen collapse, then *also* forcing the model
+# to use intensity-only features should not hurt external AUC — and may
+# help if colour was a second spurious cue.
+mode: ablation
+preprocessing:
+  - srad_nopad_gray
+  - gauss_nopad_gray
+models:
+  - resnet50
+  - resnet101
+  - densenet121
+  - densenet169
+  - efficientnet_b0
+  - convnext_tiny
+  - mobilenetv3_large
+  - vit_base
+  - swin_tiny
+training:
+  optimizer: adamw
+  lr: 1.0e-4
+  weight_decay: 1.0e-2
+  beta1: 0.9
+  beta2: 0.999
+  eps: 1.0e-8
+  scheduler: cosine_annealing
+  batch_size: 32
+  max_epochs: 100
+  early_stopping_patience: 20
+  warmup_epochs: 2
+  freeze_epochs: 1
+  monitor: val_auc
+  bf16: true
+  channels_last: true
+  grad_clip_norm: 1.0
+  ema: true
+  sampler: weighted
+seed: 42
+results_dir: results/ablation_nopad_gray/
