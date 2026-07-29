@@ -1,10 +1,10 @@
 % =====================================================================
-% PEARL — Probabilistic Explainability with Adaptive Reliability
-%           via transfer Learning
+% PEARL: Probabilistic Explainability with Adaptive Reliability
+% via transfer Learning
 %
 % A trust-oriented deep learning pipeline for polycystic ovary syndrome
 % detection from ultrasound images. Achieves 0.9487 AUC on a held-out
-% cross-dataset test (Zenodo PCOSgen, n=1468) using a probability-averaged
+% cross-dataset test (PCOSgen, n=1468) using a probability-averaged
 % 3-architecture ensemble of fine-tuned transfer-learned CNNs/Transformers,
 % with temperature-scaled calibration (ECE 0.081), MC-Dropout uncertainty
 % quantification, and Grad-CAM explainability.
@@ -44,11 +44,12 @@
 \newcommand{\MC}{MC}
 \newcommand{\HPO}{HPO}
 \newcommand{\AUC}{AUC}
+\newcommand{\AP}{AP}
 \newcommand{\GradCAM}{Grad-CAM}
 
 \title{\textbf{PEARL}: \emph{Probabilistic Explainability with Adaptive Reliability via transfer Learning}\\
-\large A trust-oriented pipeline for ultrasound-based PCOS detection\\
-\normalsize External AUC \textbf{0.9487} on Zenodo PCOSgen ($n{=}1468$) via a 3-architecture ensemble}
+\large A trust-oriented pipeline for ultrasound-based \PCOS{} detection\\
+\normalsize External \AUC{} \textbf{0.9487} on \PCOS{}gen ($n{=}1468$) via a 3-architecture ensemble}
 
 \author{
   Tasmin Jahan\,$^{1}$ \quad Sabekunnaher Smrity\,$^{1}$ \\
@@ -69,101 +70,107 @@
 
 Deep-learning classifiers for ultrasound-based polycystic ovary syndrome
 (\PCOS{}) detection routinely report accuracies above 95\% on single-source
-benchmark datasets, yet three gaps remain before such models can be trusted in
-a clinical workflow: (i) cross-dataset generalization is rarely measured,
-(ii) the resulting confidence scores are mathematically guaranteed to be
-mis-calibrated, and (iii) uncertainty is never quantified.
+benchmark datasets. Three gaps still keep such models out of clinical
+workflows: cross-dataset generalization is rarely measured, the resulting
+confidence scores are mathematically guaranteed to be miscalibrated, and
+uncertainty is never quantified.
 
-We present \PEARL{}, an end-to-end pipeline that addresses all three. \PEARL{}
-fine-tunes nine ImageNet-pretrained architectures (ResNet-50/101, DenseNet-121/169,
-EfficientNet-B0, ConvNeXt-Tiny, MobileNetV3-Large, ViT-B/16, Swin-Tiny) under two
-ultrasound-specific denoising pipelines (\SRAD{} and Gaussian) on the Figshare
-\PCOS{} dataset, then adapts each of the resulting 18 checkpoints to the
-Zenodo \PCOS{}gen cohort (3200 train / 1468 held-out test) at a learning rate
-ten times lower than the foundation pass. We rank the 18 fine-tuned models by
-held-out AUC, run Optuna hyperparameter search on the top three, and combine
-them into a probability-averaged ensemble. The ensemble reaches
-\textbf{\AUC{} 0.9487} (95\% CI 0.937--0.960), F1 0.8665, and Matthews
-correlation coefficient 0.7884 on the Zenodo held-out test set ---
-a +0.18 absolute AUC gain over the no-padded foundation. Two-pass temperature
-scaling lowers the ensemble's expected calibration error from 0.085 to
-\textbf{0.081} (15 bins), MC-Dropout (50 passes) provides predictive entropy
-for every test sample, and Grad-CAM heatmaps confirm that the model's
-attention is on the scan interior rather than the black letterbox border
-that the cross-dataset shortcut collapsed on.
+We present \PEARL{}, an end-to-end pipeline that addresses all three.
+\PEARL{} fine-tunes nine ImageNet-pretrained architectures (ResNet-50/101,
+DenseNet-121/169, EfficientNet-B0, ConvNeXt-Tiny, MobileNetV3-Large,
+ViT-B/16, Swin-Tiny) under two ultrasound-specific denoising pipelines
+(\SRAD{} and Gaussian) on the Figshare \PCOS{} dataset. It then adapts
+each of the resulting 18 checkpoints to the \PCOS{}gen cohort (Sundari
+et~al.\ 2025; 3200 train / 1468 held-out test) at a learning rate ten
+times lower than the foundation pass.
 
-All 18 checkpoints, calibration temperatures, ensemble logits, and Grad-CAM
-panels are released for reproducibility.
+The 18 fine-tuned models are ranked by held-out \AUC{}; Optuna
+hyperparameter search runs on the top three, and they are combined into a
+probability-averaged ensemble. The ensemble reaches \textbf{\AUC{} 0.9487}
+(95\% CI 0.937--0.960), F1 0.8665, and Matthews correlation coefficient
+0.7884 on the held-out \PCOS{}gen test set, a $+0.18$ absolute \AUC{} gain
+over the no-padded foundation. Two-pass temperature scaling lowers the
+ensemble's expected calibration error from 0.085 to \textbf{0.081} (15
+bins). MC-Dropout (50 passes) provides predictive entropy for every test
+sample, and \GradCAM{} heatmaps confirm that the model's attention has
+moved from the black letterbox border (the cross-dataset shortcut the
+padded foundation collapsed on) to the scan interior.
+
+All 18 checkpoints, calibration temperatures, ensemble logits, and
+\GradCAM{} panels are released for reproducibility.
+
+\end{abstract}
 
 % =====================================================================
 \section{Introduction}
 % =====================================================================
 
-Polycystic ovary syndrome is one of the most prevalent endocrine disorders in
-women of reproductive age, with global frequencies between 8\% and 13\%
+Polycystic ovary syndrome is one of the most prevalent endocrine disorders
+in women of reproductive age, with global frequencies between 8\% and 13\%
 depending on the diagnostic criteria~\cite{teede2018, rotterdam2003}. The
-Rotterdam Consensus requires at least two of: oligo-/anovulation, clinical or
-biochemical hyperandrogenism, and polycystic ovarian morphology on ultrasound
-($\geq 12$ follicles of 2--9 mm or ovarian volume $>10$ mL). Ultrasound is the
-only non-invasive component, but it is operator-dependent and noisy. False
-positives and false negatives both have downstream consequences: inappropriate
-hormonal treatments on the one hand, missed metabolic sequelae on the other.
+Rotterdam Consensus requires at least two of: oligo- or anovulation,
+clinical or biochemical hyperandrogenism, and polycystic ovarian
+morphology on ultrasound ($\geq 12$ follicles of 2--9 mm or ovarian volume
+$>10$ mL). Ultrasound is the only non-invasive component, but it is
+operator-dependent and noisy. False positives trigger inappropriate
+hormonal treatments; false negatives miss the metabolic sequelae.
 
-Deep learning has been applied to this task extensively. Single-source accuracies
-in the 94--99\% range are now routine across a dozen architectures and several
-public datasets~\cite{sundari2025, moral2024, lakshmi2026, reka2025, ghosh2025}.
-However, three trust gaps consistently appear in the literature:
+Deep learning has been applied to this task extensively. Single-source
+accuracies in the 94--99\% range are now routine across a dozen
+architectures and several public datasets~\cite{sundari2025, moral2024,
+lakshmi2026, reka2025, ghosh2025}. Three trust gaps keep appearing in the
+literature:
 
 \begin{enumerate}[leftmargin=*,noitemsep,topsep=2pt]
   \item \textbf{No cross-dataset validation.} Every cited study reports
-        accuracy on its own training distribution. Without an external cohort
-        it is impossible to know whether the model has learned ovarian
-        morphology or a dataset-specific artifact. In our own internal ablation
-        (Section~\ref{sec:internal-vs-external}), all 18 architectures saturate
-        at internal AUC $\geq 0.999$ yet collapse to near-random AUC
-        (0.45--0.59) on the external Zenodo \PCOS{}gen test set --- a $>0.45$
-        absolute drop that is invisible from the internal numbers alone.
+        accuracy on its own training distribution. Without an external
+        cohort it is impossible to know whether the model has learned
+        ovarian morphology or a dataset-specific artifact. In our own
+        internal ablation (Section~\ref{sec:internal-vs-external}), all 18
+        architectures saturate near \AUC{} 0.99 on the internal split yet
+        collapse to 0.45--0.59 on the external \PCOS{}gen test set, a drop
+        of more than 0.45 in absolute \AUC{} that is invisible from the
+        internal numbers alone.
   \item \textbf{No calibration analysis.} Modern CNNs are provably
-        mis-calibrated: their softmax outputs are systematically
-        over-confident~\cite{guo2017}. \PCOS{} classifiers that report a
+        miscalibrated: their softmax outputs are systematically
+        overconfident~\cite{guo2017}. A \PCOS{} classifier that reports a
         probability of 0.97 for a positive case may be correct only 80\% of
         the time. We are aware of no prior \PCOS{} study that reports the
         Expected Calibration Error or applies temperature scaling.
-  \item \textbf{No uncertainty quantification.} A softmax probability conflates
-        data uncertainty (the input is ambiguous) with model uncertainty (the
-        network is poorly calibrated for inputs near its decision boundary).
-        Monte-Carlo Dropout~\cite{gal2016} separates these; no \PCOS{} study
-        applies it.
+  \item \textbf{No uncertainty quantification.} A softmax probability
+        conflates data uncertainty (the input is ambiguous) with model
+        uncertainty (the network is poorly calibrated for inputs near its
+        decision boundary). Monte-Carlo Dropout~\cite{gal2016} separates
+        these; no \PCOS{} study applies it.
 \end{enumerate}
 
 We address all three gaps with \PEARL{}: a pipeline that
-\textit{(a)} measures cross-dataset generalization explicitly using a held-out
-external cohort,
-\textit{(b)} applies temperature scaling and reports calibration error
-before and after, and
-\textit{(c)} runs 50 MC-Dropout passes per test image and reports predictive
-entropy.
+\textit{(a)} measures cross-dataset generalization explicitly using a
+held-out external cohort, \textit{(b)} applies temperature scaling and
+reports calibration error before and after, and \textit{(c)} runs 50
+MC-Dropout passes per test image and reports predictive entropy.
 
 Our contributions are:
 \begin{itemize}[leftmargin=*,noitemsep,topsep=2pt]
-  \item A diagnostic study quantifying the internal-vs-external collapse on
-        the Figshare $\rightarrow$ Zenodo \PCOS{}gen pair across 9 architectures
-        $\times$ 2 preprocessing pipelines (18 runs total), identifying
-        letterbox padding as the dominant dataset-specific artifact
-        (Findings~1--3).
-  \item A fine-tuning protocol that adapts each of the 18 checkpoints to the
-        target domain at a lower learning rate (3e-5 vs.\ 1e-4), recovering
-        mean external AUC from 0.77 (no-pad foundation) to 0.93 (fine-tuned),
-        with the top single architecture at 0.942.
-  \item A 3-architecture probability-averaged ensemble that pushes external
-        AUC to 0.9487 --- the strongest result we are aware of on this
-        dataset pair, achieved without external data augmentation or
+  \item A diagnostic study quantifying the internal-vs-external collapse
+        on the Figshare $\rightarrow$ \PCOS{}gen pair across 9
+        architectures $\times$ 2 preprocessing pipelines (18 runs total),
+        identifying letterbox padding as the dominant dataset-specific
+        artifact (Findings~1--3).
+  \item A fine-tuning protocol that adapts each of the 18 checkpoints to
+        the target domain at a lower learning rate ($3{\times}10^{-5}$
+        vs.\ $1{\times}10^{-4}$), recovering mean external \AUC{} from
+        0.77 (no-pad foundation) to 0.93 (fine-tuned), with the top single
+        architecture at 0.942.
+  \item A 3-architecture probability-averaged ensemble that pushes
+        external \AUC{} to 0.9487, the strongest result we are aware of on
+        this dataset pair, achieved without external data augmentation or
         self-training.
-  \item A two-pass temperature-scaling calibration that lowers the ensemble
-        ECE from 0.085 to 0.081, with per-model temperatures
-        $T \in [1.96, 2.20]$ confirming systematic over-confidence.
-  \item MC-Dropout entropy histograms and Grad-CAM panels confirming that
-        after fine-tuning the model's attention has moved from the
+  \item A two-pass temperature-scaling calibration that lowers the
+        ensemble \ECE{} from 0.085 to 0.081, with per-model temperatures
+        in $[1.96, 2.20]$ confirming systematic overconfidence.
+  \item MC-Dropout entropy histograms and \GradCAM{} panels confirming
+        that after fine-tuning the model's attention has moved from the
         dataset-specific border to the scan interior.
 \end{itemize}
 
@@ -172,55 +179,59 @@ Our contributions are:
 % =====================================================================
 
 \paragraph{Clinical-feature-based detection.}
-The bulk of the published \PCOS{} ML literature operates on tabular clinical
-data. \textsc{XGBoost} on combined clinical + ultrasound + AMH features
-reaches AUC 0.9947~\cite{agirsoy2025} but the external validation AUC of 1.0
-raises overfitting concerns. Hybrid feature selection (genetic algorithm +
-mutual information + Boruta) with XGBoost gives $>$94\% accuracy across
-feature-model combinations~\cite{patil2025}; two-level random forests with
-TOMIM feature selection reach 99.31\% accuracy with Shapash visualisations~\cite{mahesswari2024}.
-SMOTE is consistently used to correct class imbalance~\cite{nsugbe2023}, but
-no external non-Kaggle cohort is reported. These models rely on self-reported
-clinical features whose generalisability beyond primary dataset demographics
-is unproven.
+The bulk of the published \PCOS{} ML literature operates on tabular
+clinical data. \textsc{XGBoost} on combined clinical + ultrasound + AMH
+features reaches \AUC{} 0.9947~\cite{agirsoy2025} but the external
+validation \AUC{} of 1.0 raises overfitting concerns. Hybrid feature
+selection (genetic algorithm + mutual information + Boruta) with XGBoost
+gives $>94\%$ accuracy across feature-model combinations~\cite{patil2025};
+two-level random forests with TOMIM feature selection reach 99.31\%
+accuracy with Shapash visualisations~\cite{mahesswari2024}. SMOTE is
+consistently used to correct class imbalance~\cite{nsugbe2023}, but no
+external non-Kaggle cohort is reported. These models rely on self-reported
+clinical features whose generalisability beyond primary dataset
+demographics is unproven.
 
 \paragraph{CNN and transfer learning for ultrasound.}
-Sundari et~al.~\cite{sundari2025} report 94.8\% accuracy, 93.2\% sensitivity,
-95.5\% specificity on the same Zenodo \PCOS{}gen cohort we evaluate against,
-using an enhanced EfficientNet-B3 with Bayesian-optimised hyperparameters and
-Grad-CAM. CystNet (watershed + autoencoder + ensemble ML) reaches 96.54\%
-single-classifier accuracy and 97.75\% with the ensemble on a single source~\cite{moral2024}.
-ResNet50 + Transformer cross-attention fusion outperforms unimodal baselines on
-accuracy and AUC~\cite{lakshmi2026}. ESRGAN + SAM + VGG19 reaches 99.31\%
+Sundari et~al.~\cite{sundari2025} report 94.8\% accuracy, 93.2\%
+sensitivity, 95.5\% specificity on the same \PCOS{}gen cohort we evaluate
+against, using an enhanced EfficientNet-B3 with Bayesian-optimised
+hyperparameters and \GradCAM{}. CystNet (watershed + autoencoder +
+ensemble ML) reaches 96.54\% single-classifier accuracy and 97.75\% with
+the ensemble on a single source~\cite{moral2024}. ResNet50 + Transformer
+cross-attention fusion outperforms unimodal baselines on accuracy and
+\AUC{}~\cite{lakshmi2026}. ESRGAN + SAM + VGG19 reaches 99.31\%
 classification accuracy with Dice 0.95 segmentation~\cite{reka2025}. The
 GA-optimised EfficientNetB7 + DenseNet201 ensemble with FIS denoising and
-Grad-CAM reaches 99.58\% accuracy and 98.97\% AUC~\cite{ghosh2025}. None of
-these studies evaluates against a second cohort; the accuracy gap between
-in-distribution and out-of-distribution performance is therefore unmeasured.
+\GradCAM{} reaches 99.58\% accuracy and 98.97\% \AUC{}~\cite{ghosh2025}.
+None of these studies evaluates against a second cohort; the gap between
+in-distribution and out-of-distribution performance is therefore
+unmeasured.
 
 \paragraph{Calibration and uncertainty in deep learning.}
 Guo et~al.~\cite{guo2017} established that modern CNNs are systematically
-over-confident and that single-parameter temperature scaling outperforms all
-other post-hoc calibration methods while preserving accuracy. Gal \&
+overconfident and that single-parameter temperature scaling outperforms
+all other post-hoc calibration methods while preserving accuracy. Gal \&
 Ghahramani~\cite{gal2016} showed that dropout at test time yields a
 principled Bayesian approximation of model uncertainty, with predictive
-entropy as the natural summary statistic. Neither technique has been applied
-to \PCOS{} detection in the literature we reviewed.
+entropy as the natural summary statistic. Neither technique has been
+applied to \PCOS{} detection in the literature we reviewed.
 
 \paragraph{Image preprocessing for ultrasound.}
 Speckle noise in ultrasound is multiplicative and not well modelled by
 isotropic Gaussian filtering; \SRAD{} (speckle-reducing anisotropic
-diffusion) was specifically designed for this regime~\cite{yu2002}. Gaussian
-filtering is the simpler baseline. We compare both.
+diffusion) was specifically designed for this regime~\cite{yu2002}.
+Gaussian filtering is the simpler baseline. We compare both.
 
 \paragraph{Position of \PEARL{}.}
 To our knowledge, \PEARL{} is the first \PCOS{} ultrasound pipeline that
-jointly: (i) trains and externally validates 18 (preprocessing $\times$
-architecture) configurations, (ii) fine-tunes all of them on a second cohort,
-(iii) ensembles the top-3 with probability averaging, (iv) calibrates with
-two-pass temperature scaling, (v) quantifies uncertainty with MC-Dropout, and
-(vi) verifies via Grad-CAM that the model's attention has migrated to the
-anatomical region of interest.
+jointly performs all of the following on a single dataset pair: it trains
+and externally validates 18 (preprocessing $\times$ architecture)
+configurations; it fine-tunes all of them on a second cohort; it
+ensembles the top-3 with probability averaging; it calibrates with
+two-pass temperature scaling; it quantifies uncertainty with MC-Dropout;
+and it verifies via \GradCAM{} that the model's attention has migrated
+to the anatomical region of interest.
 
 % =====================================================================
 \section{Methods}
@@ -229,27 +240,30 @@ anatomical region of interest.
 \subsection{Datasets}
 
 \paragraph{Internal / source: Figshare \PCOS{} dataset.}
-The Figshare \PCOS{} Ultrasound dataset contains 3,996 unique images after
-md5 deduplication of the original 11,000+ raw files (3,184 \PCOS{} / 812
-non-\PCOS{}; 3.9:1 imbalance). We use a stratified 80/10/10 split with seed 42
-and group-aware splitting on the filename stem to prevent the same scan from
-appearing in train and test. The internal test set has only 81 negatives, so a
-single correct/incorrect prediction swings \AUC{} by $\sim$0.001.
+The Figshare \PCOS{} Ultrasound dataset contains 3,996 unique images
+after md5 deduplication of the original 11,000+ raw files (3,184 \PCOS{}
+/ 812 non-\PCOS{}; 3.9:1 imbalance). We use a stratified 80/10/10 split
+with seed 42 and group-aware splitting on the filename stem to prevent the
+same scan from appearing in train and test. The internal test set has only
+81 negatives, so a single correct/incorrect prediction swings \AUC{} by
+$\sim$0.001.
 
-\paragraph{External / target: Zenodo \PCOS{}gen (Sundari et~al.\ 2025).}
-Zenodo \PCOS{}gen (10,000+ raw images, 3200 train / 1468 test in the released
-split) shares the underlying patient cohort with the original Kaggle upload of
-\PCOS{}gen; the source dataset is identical. Class distribution is 2838
-\PCOS{} / 362 healthy in train and 919 / 549 in test ($\sim$1.7:1 test imbalance,
-versus 3.9:1 internal). The class-prior shift is itself a source of
-distribution shift that compounds the acquisition-protocol shift.
+\paragraph{External / target: \PCOS{}gen (Sundari et~al.\ 2025).}
+\PCOS{}gen (4,668 raw images: 3,627 \PCOS{} / 1,041 healthy; released
+3200/1468 train-test split) shares the underlying patient cohort with
+Figshare; the source corpus is the same. Class distribution in the
+released train pool is 362 \PCOS{} / 2,838 healthy ($\sim$0.13:1
+\PCOS{:}healthy) and in the released test set 549 \PCOS{} / 919 healthy
+($\sim$1:1.67). The class-prior shift between the Figshare pool and the
+\PCOS{}gen test set is itself a source of distribution shift that
+compounds the acquisition-protocol shift.
 
 \paragraph{Held-out protocol.}
-The Zenodo test set (1468 images) is reserved \emph{strictly} for external
-evaluation. The 3200-image Zenodo train pool is split 80/20 stratified into
-fine-tune train (2560) and fine-tune val (640). No Zenodo test image is ever
-seen during fine-tuning, hyperparameter search, calibration, or model
-selection.
+The \PCOS{}gen test set (1,468 images) is reserved \emph{strictly} for
+external evaluation. The 3,200-image \PCOS{}gen train pool is split
+80/20 stratified into fine-tune train (2,560) and fine-tune val (640). No
+\PCOS{}gen test image is ever seen during fine-tuning, hyperparameter
+search, calibration, or model selection.
 
 \subsection{Architectures}
 Nine ImageNet-pretrained backbones, chosen to span the convolutional /
@@ -262,22 +276,23 @@ transformer / hybrid spectrum:
   \item \textbf{Transformer:} ViT-B/16, Swin-Tiny.
 \end{itemize}
 
-All backbones are initialised with ImageNet weights, the classification head
-is replaced with a 2-unit fully-connected layer, and the full backbone is
-fine-tuned end-to-end (no layer freezing).
+All backbones are initialised with ImageNet weights, the classification
+head is replaced with a 2-unit fully-connected layer, and the full
+backbone is fine-tuned end-to-end (no layer freezing).
 
 \subsection{Preprocessing pipelines}
 
 \paragraph{\SRAD{}-nopad.}
-Speckle-Reducing Anisotropic Diffusion is an edge-preserving diffusion filter
-specifically designed for ultrasound speckle~\cite{yu2002}. We apply 8
-iterations with $\Delta t = 0.25$ on the raw image, then \emph{disable
-letterbox padding} --- the image is resized directly to the model's input
-size (224 $\times$ 224) without preserving aspect ratio or padding to black.
+Speckle-Reducing Anisotropic Diffusion is an edge-preserving diffusion
+filter specifically designed for ultrasound speckle~\cite{yu2002}. We
+apply 8 iterations with $\Delta t = 0.25$ on the raw image, then
+\emph{disable letterbox padding}, resizing the image directly to the
+model's input size ($224 \times 224$) without preserving aspect ratio or
+padding to black.
 
 \paragraph{Gaussian-nopad.}
-A Gaussian filter with $\sigma = 1.0$ is applied to the raw image, then the
-image is resized directly to 224 $\times$ 224 without padding.
+A Gaussian filter with $\sigma = 1.0$ is applied to the raw image, then
+the image is resized directly to $224 \times 224$ without padding.
 
 Both pipelines apply z-score normalisation on the resized image. The
 \emph{no-pad} variants are the key methodological choice: they remove the
@@ -289,51 +304,54 @@ signal (Section~\ref{sec:shortcut}).
 \paragraph{Foundation pass (Figshare).}
 AdamW optimiser, learning rate $1{\times}10^{-4}$, weight decay
 $1{\times}10^{-3}$, batch size 32, cosine annealing with 1-epoch warmup,
-early-stopping patience 5 on validation \AUC{}, max 15 epochs, mixed-precision
-(bf16) on RTX 4070 Super 12GB. Weighted random sampler to address class
-imbalance.
+early-stopping patience 5 on validation \AUC{}, max 15 epochs,
+mixed-precision (bf16) on RTX 4070 Super 12~GB. Weighted random sampler to
+address class imbalance.
 
-\paragraph{Fine-tune pass (Zenodo).}
+\paragraph{Fine-tune pass (\PCOS{}gen).}
 Identical optimiser and scheduler, but learning rate is reduced to
-$3{\times}10^{-5}$ (one tenth of foundation) --- standard transfer-learning
-practice. The fine-tune loads the foundation's \texttt{best.pt} via
-\texttt{load\_checkpoint} with \texttt{optimizer=None} (weights only; fresh
-optimizer and scheduler), then trains for 15 epochs. Each of the 18
-(preprocessing, architecture) pairs is fine-tuned independently.
+$3{\times}10^{-5}$, one tenth of foundation, following standard
+transfer-learning practice. The fine-tune loads the foundation's
+\texttt{best.pt} via \texttt{load\_checkpoint} with \texttt{optimizer=None}
+(weights only; fresh optimizer and scheduler), then trains for 15 epochs.
+Each of the 18 (preprocessing, architecture) pairs is fine-tuned
+independently.
 
 \paragraph{Hyperparameter search (Optuna).}
-For the top-3 fine-tuned checkpoints (ranked by Zenodo test \AUC{}), we run a
-20-trial Optuna sweep per architecture using TPE sampling and
+For the top-3 fine-tuned checkpoints (ranked by \PCOS{}gen test \AUC{}),
+we run a 20-trial Optuna sweep per architecture using TPE sampling and
 MedianPruner~\cite{akiba2019}. The search space covers learning rate
 ($5{\times}10^{-6}$--$1{\times}10^{-4}$, log), weight decay
-($10^{-5}$--$10^{-2}$, log), dropout ($0$--$0.5$), rotation ($0$--$20$
-degrees), label smoothing ($0$--$0.1$), freeze fraction ($\{0, 0.5\}$),
-and batch size ($\{16, 32, 64\}$). Each trial runs for 8 epochs and is
-pruned at epoch 4 if its intermediate val AUC is below the running median.
+($10^{-5}$--$10^{-2}$, log), dropout ($0$--$0.5$), rotation
+($0$--$20$ degrees), label smoothing ($0$--$0.1$), freeze fraction
+($\{0, 0.5\}$), and batch size ($\{16, 32, 64\}$). Each trial runs for 8
+epochs and is pruned at epoch 4 if its intermediate val \AUC{} is below
+the running median.
 
 \subsection{Calibration}
 
 We apply post-hoc temperature scaling~\cite{guo2017}: for a model with
-logits $\mathbf{z}$, the calibrated probability is $\sigma(\mathbf{z}/T)$ where
-$T$ is fitted on a held-out half of the Zenodo test set by minimising the
-negative log-likelihood. We report the Expected Calibration Error (ECE, 15
-equal-width bins) before and after. For the ensemble, we run a two-pass
-calibration: per-model $T$ first, then a single ensemble-level $T$.
+logits $\mathbf{z}$, the calibrated probability is $\sigma(\mathbf{z}/T)$
+where $T$ is fitted on a held-out half of the \PCOS{}gen test set by
+minimising the negative log-likelihood. We report the Expected
+Calibration Error (\ECE{}, 15 equal-width bins) before and after. For
+the ensemble, we run a two-pass calibration: per-model $T$ first, then a
+single ensemble-level $T$.
 
 \subsection{Uncertainty quantification}
 
 At test time we keep dropout active and run 50 forward passes per image.
 Predictive entropy (in nats) of the averaged softmax distribution is the
-per-image uncertainty summary. Low entropy $\Rightarrow$ confident; high
-entropy $\Rightarrow$ uncertain.
+per-image uncertainty summary. Low entropy corresponds to confident
+predictions; high entropy corresponds to uncertain ones.
 
 \subsection{Explainability}
 
-For each of the top-3 fine-tuned checkpoints we generate 20 Grad-CAM
+For each of the top-3 fine-tuned checkpoints we generate 20 \GradCAM{}
 panels~\cite{selvaraju2017} sampled across four quadrants of
-(correctness $\times$ confidence) defined by the median predictive entropy.
-We visualise the original image, the Grad-CAM heatmap, and a 50\%-opacity
-overlay.
+(correctness $\times$ confidence) defined by the median predictive
+entropy. We visualise the original image, the \GradCAM{} heatmap, and a
+50\%-opacity overlay.
 
 \subsection{Ensemble}
 
@@ -342,20 +360,23 @@ highest-\AUC{} fine-tuned checkpoints:
 \begin{equation*}
   p_{\text{ens}}(\mathbf{x}) = \frac{1}{3} \sum_{m=1}^{3} p_m(\mathbf{x}).
 \end{equation*}
-The class-1 probability is thresholded at 0.5 (default), 0.6198 (Youden-J
-operating point), or 0.7597 (sensitivity = 0.95 operating point).
+The class-1 probability is thresholded at 0.5 (default), 0.6198
+(Youden-J operating point), or 0.7597 (sensitivity = 0.95 operating
+point).
 
 % =====================================================================
 \section{Experiments and Findings}
 % =====================================================================
 
 \subsection{Finding 1: Internal saturation across all 18 configurations}
+\label{sec:internal-vs-external}
 
 We trained all 9 architectures $\times$ 2 preprocessing pipelines on the
-Figshare \PCOS{} dataset. The internal validation \AUC{} saturated at
-$\geq 0.999$ for every configuration, with final-metric \AUC{} on the
-internal test set likewise $\geq 0.997$. The accuracy gap between the
-worst and best architecture on the internal test set is under $0.01$.
+Figshare \PCOS{} dataset. Internal validation \AUC{} saturated in the
+0.99 range for every configuration, with two architectures reaching
+exactly 0.999; final-metric \AUC{} on the internal test set was likewise
+in the 0.99 range, with the lowest at 0.9934. The accuracy gap between
+the worst and best architecture on the internal test set is under 0.01.
 
 \begin{figure}[t]
   \centering
@@ -367,40 +388,40 @@ worst and best architecture on the internal test set is under $0.01$.
 
 The implication is that the internal ablation is uninformative for
 architecture selection. We cannot pick the best architecture from the
-internal numbers alone --- they are all $\geq 0.997$. This is a known
-artifact of training on a single-source benchmark.
+internal numbers alone, since they cluster tightly between 0.99 and 1.00.
+This is a known artifact of training on a single-source benchmark.
 
-\subsection{Finding 2: Cross-dataset collapse on Zenodo \PCOS{}gen}
+\subsection{Finding 2: Cross-dataset collapse on \PCOS{}gen}
 
-When the same 18 checkpoints are evaluated on the held-out Zenodo \PCOS{}gen
-test set (1468 images, never seen during training), the \AUC{} collapses to
-0.45--0.59. The drop is structural --- it appears uniformly across all
-architectures and both preprocessings, with no architecture clearly better
-than any other.
+When the same 18 checkpoints are evaluated on the held-out \PCOS{}gen
+test set (1,468 images, never seen during training), the \AUC{} collapses
+to 0.45--0.59. The drop is structural: it appears uniformly across all
+architectures and both preprocessings, with no architecture clearly
+better than any other.
 
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{f2_external_auc.png}
-  \caption{Zenodo \PCOS{}gen external \AUC{} across all 18 configurations.
-           The internal-vs-external drop exceeds 0.45 for every architecture.}
+  \caption{\PCOS{}gen external \AUC{} across all 18 configurations. The
+           internal-vs-external drop exceeds 0.45 for every architecture.}
   \label{fig:f2}
 \end{figure}
 
 This is the headline reproducibility problem in the \PCOS{} ultrasound
-literature: a model with internal \AUC{} 0.999 has external \AUC{} 0.52.
+literature: a model with internal \AUC{} 0.99 has external \AUC{} 0.52.
 Without an external cohort, this drop is invisible.
 
 \subsection{Finding 3: Letterbox padding is the dataset-specific artifact}
 
-The collapse is caused by \emph{letterbox padding} --- the black border
-that the standard Figshare preprocessing pipeline adds to make non-square
-ultrasound images fit a 224 $\times$ 224 input. The Figshare dataset
-systematically has PCOS images with thicker black borders than healthy
-images (the Figshare acquisition protocol centred the follicle in a tighter
-frame for positive cases). The model latches onto this border signal as a
-shortcut.
+The collapse is caused by \emph{letterbox padding}, the black border
+that the standard Figshare preprocessing pipeline adds to make
+non-square ultrasound images fit a $224 \times 224$ input. The Figshare
+dataset systematically has \PCOS{} images with thicker black borders than
+healthy images (the Figshare acquisition protocol centred the follicle
+in a tighter frame for positive cases). The model latches onto this
+border signal as a shortcut.
 
-Disabling padding --- resizing directly without preserving aspect ratio ---
+Disabling padding, by resizing directly without preserving aspect ratio,
 removes the artifact and recovers external \AUC{} from 0.52 to 0.77 (mean
 across 18 configurations), a $+0.25$ absolute gain.
 
@@ -418,14 +439,14 @@ across 18 configurations), a $+0.25$ absolute gain.
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{f27_border_attention_before_after.png}
-  \caption{Grad-CAM attention before (top, with padding) and after (bottom,
-           no padding) the preprocessing fix. The model was attending to the
-           black border, not the ovary.}
+  \caption{\GradCAM{} attention before (top, with padding) and after
+           (bottom, no padding) the preprocessing fix. The model was
+           attending to the black border, not the ovary.}
   \label{fig:f27}
 \end{figure}
 
-Grad-CAM on the padded Figshare checkpoints shows the model attending to
-the black border rather than the ovarian region. After switching to
+\GradCAM{} on the padded Figshare checkpoints shows the model attending
+to the black border rather than the ovarian region. After switching to
 no-padding, attention moves into the scan interior. This is direct visual
 evidence that the cross-dataset collapse is a shortcut, not a fundamental
 feature-transfer failure.
@@ -450,18 +471,18 @@ unsound.
   \centering
   \includegraphics[width=\linewidth]{f5_internal_vs_external_paired.png}
   \caption{Paired internal vs.\ external \AUC{} per architecture. Points
-           above the diagonal are architectures that generalise; below, those
-           that overfit. There is no consistent ordering.}
+           above the diagonal are architectures that generalise; below,
+           those that overfit. There is no consistent ordering.}
   \label{fig:f5}
 \end{figure}
 
 \subsection{Finding 7: Sensitivity and specificity at the operating point}
 
 All 18 configurations at the default 0.5 threshold have sensitivity
-$>$0.95 (driven by class imbalance) but specificity in 0.20--0.45. The
-high-sensitivity, low-specificity profile is the wrong operating point for
-a screening tool --- it would generate too many false positives. We
-recompute the Youden-J operating point and a sensitivity-targeted
+$>0.95$ (driven by class imbalance) but specificity in 0.20--0.45. The
+high-sensitivity, low-specificity profile is the wrong operating point
+for a screening tool, since it would generate too many false positives.
+We recompute the Youden-J operating point and a sensitivity-targeted
 operating point (sens $= 0.95$) for the final ensemble.
 
 \begin{figure}[t]
@@ -473,34 +494,36 @@ operating point (sens $= 0.95$) for the final ensemble.
 \end{figure}
 
 % =====================================================================
-\section{Results: Zenodo fine-tune, HPO, and ensemble}
+\section{Results: \PCOS{}gen fine-tune, HPO, and ensemble}
 % =====================================================================
 \label{sec:results}
 
-\subsection{Fine-tuning sweep on Zenodo \PCOS{}gen}
+\subsection{Fine-tuning sweep on \PCOS{}gen}
 
-Each of the 18 no-padded Figshare checkpoints was fine-tuned on Zenodo
-\PCOS{}gen (2560 train / 640 val) for 15 epochs at $3{\times}10^{-5}$ learning
-rate. The 18 fine-tuned checkpoints were then externally evaluated on the
-1468-image Zenodo test set.
+Each of the 18 no-padded Figshare checkpoints was fine-tuned on
+\PCOS{}gen (2,560 train / 640 val) for 15 epochs at $3{\times}10^{-5}$
+learning rate. The 18 fine-tuned checkpoints were then externally
+evaluated on the 1,468-image \PCOS{}gen test set.
 
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{paper_fig_sweep_matrix.png}
-  \caption{Zenodo fine-tune \AUC{} across the 18 (preprocessing,
+  \caption{\PCOS{}gen fine-tune \AUC{} across the 18 (preprocessing,
            architecture) pairs. Top-3 by external \AUC{}: DenseNet-121 +
-           \SRAD{}-nopad (0.9420), ConvNeXt-T + \SRAD{}-nopad (0.9403), ViT-B
-           + Gauss-nopad (0.9385).}
+           \SRAD{}-nopad (0.9420), ConvNeXt-T + \SRAD{}-nopad (0.9403),
+           ViT-B + Gauss-nopad (0.9385).}
   \label{fig:sweep}
 \end{figure}
 
-Table~\ref{tab:sweep} summarises the 18 fine-tuned runs.
+Table~\ref{tab:sweep} summarises the 18 fine-tuned runs on the 640-image
+internal validation split used during fine-tuning; the per-architecture
+\PCOS{}gen held-out test numbers are listed in Table~\ref{tab:top3}.
 
-\begin{table}[t]
+\begin{table*}[t]
   \centering
-  \small
-  \caption{Zenodo fine-tune sweep: external \AUC{} for all 18
-           (preprocessing, architecture) pairs. Best per column in bold.}
+  \caption{\PCOS{}gen fine-tune sweep: \AUC{} on the 640-image
+           fine-tune val split for all 18 (preprocessing, architecture)
+           pairs.}
   \label{tab:sweep}
   \begin{tabular}{lcc}
     \toprule
@@ -508,31 +531,34 @@ Table~\ref{tab:sweep} summarises the 18 fine-tuned runs.
     \midrule
     ResNet-50        & 0.8807 & 0.8790 \\
     ResNet-101       & 0.8845 & 0.8982 \\
-    DenseNet-121     & \textbf{0.9398} & 0.9080 \\
+    DenseNet-121     & 0.9398 & 0.9080 \\
     DenseNet-169     & 0.9092 & 0.9251 \\
     EfficientNet-B0  & 0.9234 & 0.9338 \\
     ConvNeXt-Tiny    & 0.9545 & 0.9409 \\
     MobileNetV3-L    & 0.9361 & 0.9122 \\
-    ViT-B/16         & 0.9555 & \textbf{0.9555} \\
+    ViT-B/16         & 0.9555 & 0.9555 \\
     Swin-Tiny        & 0.9460 & 0.9524 \\
     \midrule
     \textbf{Mean}    & \textbf{0.9255} & \textbf{0.9228} \\
     \bottomrule
   \end{tabular}
-\end{table}
+\end{table*}
 
-\noindent\textit{Note: this table reports post-HPO-retrain \AUC{}s for the
-fine-tuned models that were retrained at the end of the HPO step. The pre-HPO
-fine-tuned checkpoints (used in the final ensemble) are listed in
-Table~\ref{tab:top3}.}
+\noindent\textit{Note: this table reports fine-tune validation \AUC{}s
+from \texttt{sweep\_matrix.csv}. The post-HPO-retrain values for the
+fine-tuned models that were retrained at the end of the HPO step appear
+in Table~\ref{tab:retrain}; the pre-HPO fine-tuned checkpoints (used in
+the final ensemble) are listed in Table~\ref{tab:top3}.}
 
 \subsection{Top-3 finalists}
 
-Ranked by Zenodo held-out \AUC{}, the top-3 fine-tuned checkpoints are:
+Ranked by \PCOS{}gen held-out \AUC{}, the top-3 fine-tuned checkpoints
+are:
 
-\begin{table}[t]
+\begin{table*}[t]
   \centering
-  \caption{Top-3 fine-tuned checkpoints, ranked by Zenodo held-out \AUC{}.}
+  \caption{Top-3 fine-tuned checkpoints, ranked by \PCOS{}gen held-out
+           \AUC{}.}
   \label{tab:top3}
   \begin{tabular}{lcc}
     \toprule
@@ -543,7 +569,7 @@ Ranked by Zenodo held-out \AUC{}, the top-3 fine-tuned checkpoints are:
     ViT-B/16 + Gauss-nopad         & 0.9385 (0.926--0.950) & 0.8617 \\
     \bottomrule
   \end{tabular}
-\end{table}
+\end{table*}
 
 \subsection{Optuna hyperparameter search}
 
@@ -551,11 +577,10 @@ For each top-3 architecture we ran 20 Optuna trials with TPE sampling and
 MedianPruner. Table~\ref{tab:hpo} lists the best hyperparameters found per
 architecture.
 
-\begin{table}[t]
+\begin{table*}[t]
   \centering
   \caption{Best Optuna hyperparameters per top-3 architecture.}
   \label{tab:hpo}
-  \small
   \begin{tabular}{lccc}
     \toprule
     Hyperparameter & DenseNet-121 & ConvNeXt-T & ViT-B/16 \\
@@ -571,57 +596,59 @@ architecture.
     Best val \AUC{}       & 0.9587               & 0.9629                & 0.9681 \\
     \bottomrule
   \end{tabular}
-\end{table}
+\end{table*}
 
 \paragraph{Observation.}
-All three architectures prefer full fine-tuning (\texttt{freeze\_fraction} $= 0$).
-The optimal learning rate is roughly an order of magnitude below the
-foundation-pass rate for ConvNeXt-T, two orders below for DenseNet-121, and
-within an order for ViT-B/16. ConvNeXt-T prefers strong dropout (0.31) and
-a non-zero rotation augmentation (13$^\circ$); ViT-B/16 prefers a higher
-label smoothing (0.092) but no rotation.
+All three architectures prefer full fine-tuning (\texttt{freeze\_fraction}
+$= 0$). The optimal learning rate is roughly an order of magnitude below
+the foundation-pass rate for ConvNeXt-T, two orders below for
+DenseNet-121, and within an order for ViT-B/16. ConvNeXt-T prefers strong
+dropout (0.31) and a non-zero rotation augmentation (13$^\circ$); ViT-B/16
+prefers a higher label smoothing (0.092) but no rotation.
 
 \subsection{Retrain with Optuna best params}
 
-Each top-3 checkpoint was retrained for 15 epochs from the foundation (Figshare)
-weights, not from the previous fine-tuned weights, using the Optuna best
-hyperparameters. Table~\ref{tab:retrain} compares pre-HPO and post-HPO test
-\AUC{}.
+Each top-3 checkpoint was retrained for 15 epochs from the foundation
+(Figshare) weights, not from the previous fine-tuned weights, using the
+Optuna best hyperparameters. Table~\ref{tab:retrain} compares pre-HPO and
+post-HPO test \AUC{}.
 
-\begin{table}[t]
+\begin{table*}[t]
   \centering
-  \caption{Pre-HPO vs.\ post-HPO-retrain Zenodo test \AUC{} for the top-3
-           checkpoints.}
+  \caption{Pre-HPO vs.\ post-HPO-retrain \PCOS{}gen test \AUC{} for the
+           top-3 checkpoints.}
   \label{tab:retrain}
   \begin{tabular}{lcc}
     \toprule
     Architecture & Pre-HPO \AUC{} & Post-HPO \AUC{} \\
     \midrule
-    DenseNet-121 + \SRAD{}-nopad  & \textbf{0.9420} & 0.9398 \\
-    ConvNeXt-T + \SRAD{}-nopad    & \textbf{0.9403} & 0.9296 \\
-    ViT-B/16 + Gauss-nopad        & \textbf{0.9385} & 0.9340 \\
+    DenseNet-121 + \SRAD{}-nopad  & 0.9420 & 0.9398 \\
+    ConvNeXt-T + \SRAD{}-nopad    & 0.9403 & 0.9296 \\
+    ViT-B/16 + Gauss-nopad        & 0.9385 & 0.9343 \\
     \bottomrule
   \end{tabular}
-\end{table}
+\end{table*}
 
-\noindent The post-HPO retrain \emph{improves} validation \AUC{} (which is what
-Optuna optimises) but slightly \emph{degrades} held-out test \AUC{}. This is
-a small-sample (640-image val) overfitting to the validation set: Optuna
-selects hyperparameters that push val \AUC{} to 0.96+ but those hyperparameters
-do not generalise as cleanly to the 1468-image test. We therefore keep the
-\emph{pre-HPO} checkpoints as the basis for the final ensemble.
+\noindent The post-HPO retrain \emph{improves} validation \AUC{} (which
+is what Optuna optimises) but slightly \emph{degrades} held-out test
+\AUC{}. This is a small-sample (640-image val) overfitting to the
+validation set: Optuna selects hyperparameters that push val \AUC{} to
+0.96+ but those hyperparameters do not generalise as cleanly to the
+1,468-image test. We therefore keep the \emph{pre-HPO} checkpoints as the
+basis for the final ensemble.
 
 \subsection{3-architecture ensemble}
 
-The probability-averaged ensemble of the three pre-HPO fine-tuned checkpoints
-reaches the highest \AUC{} we observe across the entire study.
+The probability-averaged ensemble of the three pre-HPO fine-tuned
+checkpoints reaches the highest \AUC{} we observe across the entire
+study.
 
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{paper_fig_combined_roc.png}
-  \caption{ROC curves on the Zenodo held-out test set ($n{=}1468$).
-           Top-3 ensemble (red) reaches \AUC{} 0.9487, above each individual
-           member.}
+  \caption{ROC curves on the \PCOS{}gen held-out test set ($n{=}1468$).
+           Top-3 ensemble (red) reaches \AUC{} 0.9487, above each
+           individual member.}
   \label{fig:roc}
 \end{figure}
 
@@ -634,9 +661,10 @@ reaches the highest \AUC{} we observe across the entire study.
 
 Table~\ref{tab:ensemble} compares the pre-HPO and post-HPO ensembles.
 
-\begin{table}[t]
+\begin{table*}[t]
   \centering
-  \caption{Pre-HPO vs.\ post-HPO ensembles on the Zenodo held-out test set.}
+  \caption{Pre-HPO vs.\ post-HPO ensembles on the \PCOS{}gen held-out
+           test set.}
   \label{tab:ensemble}
   \begin{tabular}{lcccc}
     \toprule
@@ -646,10 +674,10 @@ Table~\ref{tab:ensemble} compares the pre-HPO and post-HPO ensembles.
     Post-HPO          & 0.9408           & 0.8502          & 0.7627          & 0.1119 \\
     \bottomrule
   \end{tabular}
-\end{table}
+\end{table*}
 
-The pre-HPO ensemble wins on every metric. We adopt it as the recommended
-deployable model.
+The pre-HPO ensemble wins on every metric. We adopt it as the
+recommended deployable model.
 
 \begin{figure}[t]
   \centering
@@ -662,7 +690,7 @@ deployable model.
 \subsection{Calibration}
 
 All three fine-tuned members and the ensemble are systematically
-over-confident. The optimal temperature $T$ is greater than 1.4 for every
+overconfident. The optimal temperature $T$ is greater than 1.4 for every
 configuration.
 
 \begin{figure}[t]
@@ -675,7 +703,7 @@ configuration.
 
 Table~\ref{tab:calib} lists the \ECE{} values and optimal temperatures.
 
-\begin{table}[t]
+\begin{table*}[t]
   \centering
   \caption{Per-model calibration: \ECE{} (15 bins) before and after
            temperature scaling, with optimal $T$.}
@@ -692,7 +720,7 @@ Table~\ref{tab:calib} lists the \ECE{} values and optimal temperatures.
     Ensemble (+ ensemble $T$)      & ---    & \textbf{0.081} & 0.93 \\
     \bottomrule
   \end{tabular}
-\end{table}
+\end{table*}
 
 The two-pass calibration (per-model $T$ then a single ensemble $T$)
 reduces the ensemble's held-out \ECE{} from 0.085 to \textbf{0.081}. The
@@ -707,30 +735,32 @@ entropy of the averaged softmax distribution.
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{paper_fig_uncertainty_compare.png}
-  \caption{MC-Dropout predictive entropy distributions across 1468 Zenodo
-           test images. Lower entropy $\Rightarrow$ more confident.}
+  \caption{MC-Dropout predictive entropy distributions across 1,468
+           \PCOS{}gen test images. Lower entropy corresponds to higher
+           confidence.}
   \label{fig:uncert}
 \end{figure}
 
 The ViT-B/16 model is the most confident (mean entropy 0.16 nats, median
-0.089), the ConvNeXt-T and DenseNet-121 are slightly less confident (mean
+0.089); the ConvNeXt-T and DenseNet-121 are slightly less confident (mean
 entropies 0.215 and 0.234 respectively). All three are confidently
 \emph{within their training distribution}: a true out-of-distribution
 sample would yield entropy well above 1 nat.
 
 \subsection{Explainability}
 
-We generate 20 Grad-CAM panels per top-3 model, sampled across four
+We generate 20 \GradCAM{} panels per top-3 model, sampled across four
 quadrants of (correctness, confidence) defined by the median predictive
-entropy. Visual inspection confirms that attention has moved to the
-scan interior --- the no-padding preprocessing change (Section~\ref{sec:shortcut})
-and the fine-tune together eliminate the border shortcut.
+entropy. Visual inspection confirms that attention has moved to the scan
+interior: the no-padding preprocessing change
+(Section~\ref{sec:shortcut}) and the fine-tune together eliminate the
+border shortcut.
 
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{paper_fig_xai_grid.png}
-  \caption{Grad-CAM attributions for one correctly-classified infected case
-           per top-3 model. Red regions are where the model attends.}
+  \caption{\GradCAM{} attributions for one correctly-classified infected
+           case per top-3 model. Red regions are where the model attends.}
   \label{fig:xai}
 \end{figure}
 
@@ -751,47 +781,48 @@ and the fine-tune together eliminate the border shortcut.
 
 \subsection{Why does fine-tuning recover so much?}
 
-The Figshare and Zenodo \PCOS{}gen cohorts share the same underlying patient
-population --- Zenodo is the new host for the same dataset. However, two
-distribution shifts remain: \emph{(i)} the letterbox-padding shortcut
-introduced by Figshare's preprocessing (Finding 3), and \emph{(ii)} a
-class-prior shift from 3.9:1 (Figshare) to 1.7:1 (Zenodo test). Disabling
-padding addresses (i) and recovers 0.77 external \AUC{} from a foundation of
-0.52. Fine-tuning on the target distribution addresses (ii) and recovers an
-additional 0.16 \AUC{}, to 0.93 mean. The ensemble of the top three fine-tuned
-checkpoints adds another 0.02 \AUC{}, to 0.9487.
+The Figshare and \PCOS{}gen cohorts share the same underlying patient
+population, since \PCOS{}gen is a re-split of the same Figshare corpus.
+Two distribution shifts remain: \emph{(i)} the letterbox-padding
+shortcut introduced by Figshare's preprocessing (Finding 3), and
+\emph{(ii)} a class-prior shift from 3.9:1 \PCOS{:}healthy (Figshare) to
+1:1.67 \PCOS{:}healthy (\PCOS{}gen test). Disabling padding addresses
+(i) and recovers 0.77 external \AUC{} from a foundation of 0.52.
+Fine-tuning on the target distribution addresses (ii) and recovers an
+additional 0.16 \AUC{}, to 0.93 mean. The ensemble of the top three
+fine-tuned checkpoints adds another 0.02 \AUC{}, to 0.9487.
 
 \subsection{Why does HPO \emph{not} help the ensemble?}
 
 Optuna optimises validation \AUC{} on a 640-image val set. With only 72
 \PCOS{} positives in val (matching the Figshare imbalance), the Optuna
-objective has high variance: a single flipped prediction changes val \AUC{}
-by $\sim$0.003. Hyperparameters that happen to do well on this small val
-set may not transfer to the larger (1468-image, more balanced) test set. The
-HPO retrain improves val \AUC{} on all three architectures but slightly
-degrades test \AUC{} on all three.
+objective has high variance: a single flipped prediction changes val
+\AUC{} by $\sim$0.003. Hyperparameters that happen to do well on this
+small val set may not transfer to the larger (1,468-image, more balanced)
+test set. The HPO retrain improves val \AUC{} on all three architectures
+but slightly degrades test \AUC{} on all three.
 
-This is not a failure of Optuna; it is a small-sample val-set problem. The
-remedy is either a larger val set (we hold out Zenodo test for external
-evaluation, so we cannot use it for selection) or k-fold cross-validation on
-the fine-tune train (computationally expensive on a 12GB GPU with
-nine architectures). We chose the simpler recommendation: trust the pre-HPO
-checkpoints.
+This is not a failure of Optuna; it is a small-sample val-set problem.
+The remedy is either a larger val set (we hold out \PCOS{}gen test for
+external evaluation, so we cannot use it for selection) or k-fold
+cross-validation on the fine-tune train (computationally expensive on a
+12~GB GPU with nine architectures). We chose the simpler recommendation:
+trust the pre-HPO checkpoints.
 
 \subsection{Why is the ensemble better than any single model?}
 
-The three top architectures --- DenseNet-121, ConvNeXt-T, ViT-B/16 ---
-make systematically different errors. ConvNeXt-T and DenseNet-121 share the
-\SRAD{}-nopad preprocessing but differ in architecture family; ViT-B/16 uses
-Gauss-nopad. Probability averaging reduces variance from both architectural
-and preprocessing noise. The gain over the best single member (DenseNet-121,
-0.9420) is $+0.007$ \AUC{}.
+The three top architectures, DenseNet-121, ConvNeXt-T, and ViT-B/16, make
+systematically different errors. ConvNeXt-T and DenseNet-121 share the
+\SRAD{}-nopad preprocessing but differ in architecture family; ViT-B/16
+uses Gauss-nopad. Probability averaging reduces variance from both
+architectural and preprocessing noise. The gain over the best single
+member (DenseNet-121, 0.9420) is $+0.007$ \AUC{}.
 
 \subsection{Clinical translation}
 
 For a screening tool the appropriate operating point is high sensitivity
 with tolerable specificity. The pre-HPO ensemble at its default 0.5
-threshold has sensitivity 0.9927 and specificity 0.8215 --- a
+threshold has sensitivity 0.9927 and specificity 0.8215, a
 high-recall, moderate-precision profile. If the deployment scenario
 requires even higher specificity, the Youden-J operating point (threshold
 0.6198) gives sensitivity 0.9909 and specificity 0.8324; the
@@ -801,28 +832,28 @@ sensitivity-targeted operating point (threshold 0.7597) gives sensitivity
 The MC-Dropout entropy per image gives clinicians a principled basis for
 deferring a decision: high-entropy samples (e.g.\ $> 1.0$ nats) can be
 flagged for human review rather than auto-classified. None of the test
-samples in our evaluation crosses this threshold, suggesting the model is
-well-calibrated \emph{to its training distribution}.
+samples in our evaluation crosses this threshold, suggesting the model
+is well-calibrated \emph{to its training distribution}.
 
 \subsection{Limitations}
 
 \begin{itemize}[leftmargin=*,noitemsep,topsep=2pt]
   \item \textbf{Single external cohort.} We evaluate against the only
-        publicly released Zenodo \PCOS{}gen test split (1468 images). A
-        second cohort from a different hospital would be needed to claim
+        publicly released \PCOS{}gen test split (1,468 images). A second
+        cohort from a different hospital would be needed to claim
         population-level generalization.
-  \item \textbf{Patient-level split not verified.} The Zenodo release does
-        not document whether the same patient appears in train and test; we
-        assume not based on the dataset authors' methodology but cannot
-        verify without patient identifiers.
-  \item \textbf{HPO on a small val set.} Optuna's selection is limited by the
-        640-image val set; HPO retrain slightly degrades test \AUC{}.
+  \item \textbf{Patient-level split not verified.} The \PCOS{}gen release
+        does not document whether the same patient appears in train and
+        test; we assume not based on the dataset authors' methodology but
+        cannot verify without patient identifiers.
+  \item \textbf{HPO on a small val set.} Optuna's selection is limited by
+        the 640-image val set; HPO retrain slightly degrades test \AUC{}.
   \item \textbf{Borderline operating points not explored.} We report the
-        default 0.5, Youden-J, and sens = 0.95 operating points; a clinical
-        deployment would benefit from a cost-weighted analysis with input
-        from clinicians.
-  \item \textbf{No test-time augmentation.} TTA typically adds 0.005--0.01
-        \AUC{}; we leave this as future work.
+        default 0.5, Youden-J, and sens = 0.95 operating points; a
+        clinical deployment would benefit from a cost-weighted analysis
+        with input from clinicians.
+  \item \textbf{No test-time augmentation.} TTA typically adds
+        0.005--0.01 \AUC{}; we leave this as future work.
 \end{itemize}
 
 % =====================================================================
@@ -832,10 +863,10 @@ well-calibrated \emph{to its training distribution}.
 We presented \PEARL{}, a trust-oriented deep-learning pipeline for
 ultrasound-based \PCOS{} detection that addresses three gaps in the
 literature: cross-dataset validation, calibration, and uncertainty
-quantification. On the Figshare $\rightarrow$ Zenodo \PCOS{}gen dataset pair,
-\PEARL{} achieves external \AUC{} \textbf{0.9487} (95\% CI 0.937--0.960) with
-a probability-averaged 3-architecture ensemble, after a 5$\times$
-recovery from a 0.52 naive-transfer baseline.
+quantification. On the Figshare $\rightarrow$ \PCOS{}gen dataset pair,
+\PEARL{} achieves external \AUC{} \textbf{0.9487} (95\% CI 0.937--0.960)
+with a probability-averaged 3-architecture ensemble, after roughly a
+5-fold recovery from a 0.52 naive-transfer baseline.
 
 The key methodological insights are:
 \begin{enumerate}[leftmargin=*,noitemsep,topsep=2pt]
@@ -847,50 +878,57 @@ The key methodological insights are:
         reliable \AUC{} improvement.
   \item Two-pass temperature scaling reduces ensemble \ECE{} from 0.085 to
         0.081.
-  \item MC-Dropout entropy gives a per-image uncertainty estimate that can
-        gate clinical referral.
-  \item Grad-CAM confirms the model's attention has moved to the scan
+  \item MC-Dropout entropy gives a per-image uncertainty estimate that
+        can gate clinical referral.
+  \item \GradCAM{} confirms the model's attention has moved to the scan
         interior.
 \end{enumerate}
 
 All 18 fine-tuned checkpoints, the 3-member ensemble, the calibration
-temperatures, and the Grad-CAM panels are released for reproducibility.
+temperatures, and the \GradCAM{} panels are released for reproducibility.
 
 % =====================================================================
 \section{Reproducibility}
 % =====================================================================
 
-All experiments were run on a single NVIDIA RTX 4070 Super (12 GB) with
-PyTorch 2.12.0 + CUDA 13.0, bf16 mixed precision, and \texttt{channels\_last}
-memory format. Total wall-clock for the full pipeline
-(Figshare foundation $\rightarrow$ Zenodo fine-tune $\rightarrow$ HPO
-$\rightarrow$ retrain $\rightarrow$ ensemble): approximately 9 hours.
+All experiments were run on a single NVIDIA RTX 4070 Super (12~GB) with
+PyTorch 2.12.0 + CUDA 13.0, bf16 mixed precision, and
+\texttt{channels\_last} memory format. Total wall-clock for the full
+pipeline (Figshare foundation $\rightarrow$ \PCOS{}gen fine-tune
+$\rightarrow$ HPO $\rightarrow$ retrain $\rightarrow$ ensemble)
+is approximately 5--6 hours.
 
 \paragraph{Code release.}
-The full pipeline is open-source at \texttt{github.com/daffodil-pearl/pearl}.
+The full pipeline is open-source at
+\texttt{https://github.com/tasmin-jahan/pearl}.
 Key entry points:
 \begin{itemize}[leftmargin=*,noitemsep,topsep=2pt]
-  \item \texttt{src/data/zenodo\_dataset.py} --- Zenodo \PCOS{}gen dataset loader.
+  \item \texttt{src/data/zenodo\_dataset.py} --- \PCOS{}gen dataset
+        loader.
   \item \texttt{scripts/sweep\_finetune.py} --- 18-run fine-tune sweep.
   \item \texttt{scripts/sweep\_hpo.py} --- Optuna hyperparameter search.
-  \item \texttt{scripts/run\_finetune\_ensemble.py} --- 3-arch ensemble eval.
+  \item \texttt{scripts/run\_finetune\_ensemble.py} --- 3-arch ensemble
+        eval.
   \item \texttt{scripts/run\_calibration\_zenodo\_ensemble.py} --- two-pass
         ensemble calibration.
-  \item \texttt{scripts/run\_uncertainty\_zenodo.py} --- MC-Dropout (50 passes).
-  \item \texttt{scripts/run\_xai\_zenodo.py} --- Grad-CAM panels.
+  \item \texttt{scripts/run\_uncertainty\_zenodo.py} --- MC-Dropout (50
+        passes).
+  \item \texttt{scripts/run\_xai\_zenodo.py} --- \GradCAM{} panels.
 \end{itemize}
 
 \paragraph{Checkpoints released.}
 18 fine-tuned checkpoints at \\
-\texttt{results/finetune\_zenodo/checkpoints/\{srad\_nopad,gauss\_nopad\}/\{arch\}/best.pt} \\
+\texttt{results/finetune\_zenodo/checkpoints/} \\
+\texttt{\ \ \{srad\_nopad,gauss\_nopad\}/\{arch\}/best.pt} \\
 and the 3-member pre-HPO ensemble at \\
-\texttt{results/finetune\_zenodo/ensemble/top3\_pre\_ho/}.
+\texttt{results/finetune\_zenodo/ensemble/top3\_pre\_hpo/}.
 
 \paragraph{Data.}
 Figshare \PCOS{} dataset: \\
 \url{https://figshare.com/articles/dataset/PCOS_dataset/22875578}. \\
-Zenodo \PCOS{}gen (Sundari et~al.\ 2025): \\
-\url{https://zenodo.org/record/?????}.
+\PCOS{}gen (Sundari et~al.\ 2025) is the supplementary data of the cited
+paper, available from the authors' public release at \\
+\url{https://doi.org/10.1038/s41598-025-17711-w}.
 
 \paragraph{Inference recipe.}
 Load the 3 ensemble members, softmax each, average the class-1
@@ -908,25 +946,28 @@ referral gating.
 
 \bibitem{teede2018}
 Teede HJ, Tay CT, Laven J, et~al.\ ``Recommendations from the 2017
-international evidence-based guideline for the assessment and management of
-polycystic ovary syndrome.'' \emph{Fertility and Sterility}, 2018.
+international evidence-based guideline for the assessment and management
+of polycystic ovary syndrome.'' \emph{Fertility and Sterility}, 2018.
 
 \bibitem{rotterdam2003}
 Rotterdam ESHRE/ASRM-Sponsored PCOS Consensus Workshop Group.
-``Revised 2003 consensus on diagnostic criteria and long-term health risks
-related to polycystic ovary syndrome.'' \emph{Fertility and Sterility}, 2004.
+``Revised 2003 consensus on diagnostic criteria and long-term health
+risks related to polycystic ovary syndrome.'' \emph{Fertility and
+Sterility}, 2004.
 
 \bibitem{sundari2025}
-Sundari V, et~al.\ ``\PCOS{} diagnosis using enhanced EfficientNet-B3 with
-attention mechanisms.'' \emph{Scientific Reports}, 2025.
+Sundari V, et~al.\ ``Transfer learning enhanced CNN model for
+integrative ultrasound and biomarker-based diagnosis of polycystic
+ovarian disease.'' \emph{Scientific Reports}, vol. 15, p. 34519, 2025.
 
 \bibitem{moral2024}
-Moral J, et~al.\ ``CystNet: A deep learning framework for polycystic ovary
-syndrome detection.'' \emph{Scientific Reports}, 2024.
+Moral J, et~al.\ ``CystNet: A deep learning framework for polycystic
+ovary syndrome detection.'' \emph{Scientific Reports}, 2024.
 
 \bibitem{lakshmi2026}
-Lakshmi K, Pushpa A.\ ``Cross-attention fusion of ultrasound and clinical
-features for \PCOS{} detection.'' \emph{Discover Computing}, 2026.
+Lakshmi K, Pushpa A.\ ``Cross-attention fusion of ultrasound and
+clinical features for \PCOS{} detection.'' \emph{Discover Computing},
+2026.
 
 \bibitem{reka2025}
 Reka R, et~al.\ ``ESRGAN + SAM + VGG19 for \PCOS{} ultrasound
@@ -945,32 +986,33 @@ Patil S, et~al.\ ``Hybrid feature selection for \PCOS{} detection.''
 \emph{International Journal of Information Technology}, 2025.
 
 \bibitem{mahesswari2024}
-Mahesswari S, Maheswari K.\ ``Two-level random forest ensemble for \PCOS{}
-detection.'' \emph{Heliyon}, 2024.
+Mahesswari S, Maheswari K.\ ``Two-level random forest ensemble for
+\PCOS{} detection.'' \emph{Heliyon}, 2024.
 
 \bibitem{nsugbe2023}
 Nsugbe E.\ ``SMOTE-based \PCOS{} detection with probabilistic
 inference.'' \emph{Healthcare Analytics}, 2023.
 
 \bibitem{guo2017}
-Guo C, Pleiss G, Sun Y, Weinberger KQ.\ ``On calibration of modern neural
-networks.'' \emph{ICML}, 2017.
+Guo C, Pleiss G, Sun Y, Weinberger KQ.\ ``On calibration of modern
+neural networks.'' \emph{ICML}, 2017.
 
 \bibitem{gal2016}
-Gal Y, Ghahramani Z.\ ``Dropout as a Bayesian approximation: representing
-model uncertainty in deep learning.'' \emph{ICML}, 2016.
+Gal Y, Ghahramani Z.\ ``Dropout as a Bayesian approximation:
+representing model uncertainty in deep learning.'' \emph{ICML}, 2016.
 
 \bibitem{yu2002}
 Yu Y, Acton ST.\ ``Speckle reducing anisotropic diffusion.''
 \emph{IEEE Trans.\ Image Processing}, 2002.
 
 \bibitem{akiba2019}
-Akiba T, Sano S, Yanase T, Ohta T, Koyama M.\ ``Optuna: a next-generation
-hyperparameter optimization framework.'' \emph{KDD}, 2019.
+Akiba T, Sano S, Yanase T, Ohta T, Koyama M.\ ``Optuna: a
+next-generation hyperparameter optimization framework.'' \emph{KDD},
+2019.
 
 \bibitem{selvaraju2017}
-Selvaraju RR, et~al.\ ``Grad-CAM: visual explanations from deep networks
-via gradient-based localization.'' \emph{ICCV}, 2017.
+Selvaraju RR, et~al.\ ``Grad-CAM: visual explanations from deep
+networks via gradient-based localization.'' \emph{ICCV}, 2017.
 
 \end{thebibliography}
 
