@@ -61,3 +61,5 @@ hybridseednet/
 data_external/
 context.md
 .SKILLS/
+.puku-cli/
+.pytest_cache/
