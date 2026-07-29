@@ -677,7 +677,11 @@ Table~\ref{tab:ensemble} compares the pre-HPO and post-HPO ensembles.
 \end{table*}
 
 The pre-HPO ensemble wins on every metric. We adopt it as the
-recommended deployable model.
+recommended deployable model.  Figure~\ref{fig:confusion-stages} breaks
+the ensemble's headline numbers into per-cell counts on the held-out
+\PCOS{}gen test set, and shows the same breakdown for the foundation
+cross-dataset zero-shot evaluation and the strongest single fine-tuned
+member alongside it.
 
 \begin{figure}[t]
   \centering
@@ -685,6 +689,26 @@ recommended deployable model.
   \caption{Pre-HPO vs.\ post-HPO ensemble: \AUC{}, F1, MCC, Brier score.
            Pre-HPO wins on all four metrics.}
   \label{fig:ensemble-metrics}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{paper_fig_confusion_stages.png}
+  \caption{Three-stage confusion-matrix progression on \PCOS{}gen.
+           \textbf{Left}: foundation zero-shot (Figshare training,
+           evaluated on the full \PCOS{}gen corpus, $n=4668$). The model
+           predicts \emph{PCOS} on almost every case (sens 0.975, spec
+           0.041) because Figshare is 3.9{:}1 PCOS-heavy. \textbf{Centre}:
+           after fine-tuning on the \PCOS{}gen train pool, the best single
+           model (DenseNet-121, srad+no-pad) recovers sens 0.991 but still
+           produces 241 false positives on the held-out 1{,}468-image test
+           set. \textbf{Right}: the pre-HPO 3-architecture probability-averaged
+           ensemble keeps sens 0.993 and drops false positives to 164
+           (specificity 0.822). Stages~1 and 2--3 are not strictly comparable
+           because Stage 1 was scored on the \emph{whole} \PCOS{}gen corpus
+           before the train/test split existed; Stages~2 and 3 share the
+           identical held-out test split.}
+  \label{fig:confusion-stages}
 \end{figure}
 
 \subsection{Calibration}

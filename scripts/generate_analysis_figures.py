@@ -117,7 +117,11 @@ def grouped_bars(rows, metric_key, title, ylabel, fname, *,
                       edgecolor="black", linewidth=0.4)
         for b, v in zip(bars, vals):
             if not np.isnan(v):
-                ax.text(b.get_x() + b.get_width() / 2, v + (0.005 if not lower_better else -0.01),
+                # Keep labels just above each bar.  A fixed data-unit offset
+                # is too large for near-1.0 AUC values and can push labels
+                # outside the requested y-limits, creating a large blank gap.
+                offset = 0.00002 if not lower_better else -0.01
+                ax.text(b.get_x() + b.get_width() / 2, v + offset,
                         fmt.format(v), ha="center", va="bottom" if not lower_better else "top",
                         fontsize=7, color="#333")
 
