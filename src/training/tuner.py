@@ -14,6 +14,7 @@ import optuna
 
 from src.model.builder import build_model
 from src.training.trainer import Trainer
+from src.training.checkpoint import load_checkpoint
 
 
 class OptunaCallback:
@@ -97,6 +98,24 @@ def make_objective(
 
         # ---- 3. Build model, data, loss (mirrors trainer.py inputs) ----
         model = build_model(cfg)
+
+        # Optional resume: if the experiment config specifies a checkpoint
+        # to load weights from, load them here BEFORE constructing the
+        # optimizer. This is used for HPO on top of fine-tuning — we want
+        # each trial to start from the already-fine-tuned weights, not
+        # from the ImageNet init.
+        fine_tune_ckpt = experiment_config.get("fine_tune_resume_from")
+        if fine_tune_ckpt:
+            import os as _os
+            if not _os.path.isfile(fine_tune_ckpt):
+                raise FileNotFoundError(
+                    f"fine_tune_resume_from set but checkpoint not found: {fine_tune_ckpt}"
+                )
+            load_checkpoint(
+                model, fine_tune_ckpt,
+                optimizer=None, scheduler=None, ema=None, device=device,
+            )
+
         input_size = cfg.get("input_size", 224)
         sampler = cfg.get("sampler", "shuffle")
         train_loader, val_loader, test_loader = build_dataloaders_fn(

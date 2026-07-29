@@ -1,0 +1,59 @@
+{
+  "n_samples": 1468,
+  "n_positive": 549,
+  "n_negative": 919,
+  "threshold_used": 0.5,
+  "test_accuracy": 0.8692,
+  "test_precision": 0.7435,
+  "test_recall": 0.9927,
+  "test_specificity": 0.7954,
+  "test_npv": 0.9946,
+  "test_f1": 0.8502,
+  "test_mcc": 0.7627,
+  "test_fpr": 0.2046,
+  "test_fnr": 0.0073,
+  "test_auc_roc": 0.9408,
+  "test_auc_roc_ci_low": 0.9274,
+  "test_auc_roc_ci_high": 0.9526,
+  "test_auc_pr": 0.833,
+  "test_nll": 0.4054,
+  "test_brier": 0.1119,
+  "test_tp": 545,
+  "test_fp": 188,
+  "test_tn": 731,
+  "test_fn": 4,
+  "youden_threshold": 0.7925,
+  "youden_accuracy": 0.8937,
+  "youden_sensitivity": 0.9909,
+  "youden_specificity": 0.8357,
+  "youden_f1": 0.8746,
+  "op_threshold_at_sens": 0.8872,
+  "op_target_sensitivity": 0.95,
+  "op_specificity_at_target": 0.8629,
+  "op_f1_at_target": 0.8722,
+  "n_members": 3,
+  "n_infected": 549,
+  "n_healthy": 919,
+  "members": [
+    {
+      "run_dir": "results/finetune_zenodo/checkpoints/srad_nopad/densenet121",
+      "arch": "densenet121",
+      "preprocessing": "srad_nopad",
+      "individual_test_auc": 0.9398
+    },
+    {
+      "run_dir": "results/finetune_zenodo/checkpoints/srad_nopad/convnext_tiny",
+      "arch": "convnext_tiny",
+      "preprocessing": "srad_nopad",
+      "individual_test_auc": 0.9296
+    },
+    {
+      "run_dir": "results/finetune_zenodo/checkpoints/gauss_nopad/vit_base",
+      "arch": "vit_base",
+      "preprocessing": "srad_nopad",
+      "individual_test_auc": 0.9343
+    }
+  ],
+  "architecture": "ensemble[densenet121,convnext_tiny,vit_base]",
+  "preprocessing": "srad_nopad"
+}

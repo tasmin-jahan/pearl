@@ -1,0 +1,92 @@
+model:
+  name: efficientnet_b0
+  timm_name: tf_efficientnet_b0
+  input_size: 224
+  pretrained: true
+  num_classes: 2
+  freeze_fraction: 0.6
+  head:
+    hidden_dim: 256
+    dropout: 0.5
+preprocessing:
+  name: srad_nopad
+  steps:
+    resize: true
+    padding: none
+    clahe:
+      enabled: true
+      clip_limit: 2.0
+      tile_size:
+      - 8
+      - 8
+    srad:
+      enabled: true
+      iterations: 20
+      kappa: 30
+      gamma: 0.1
+    anisotropic_diffusion:
+      enabled: false
+    gaussian:
+      enabled: false
+    zscore_normalize:
+      enabled: true
+  augmentation:
+    rotation: 15
+    horizontal_flip: true
+    scale: 0.1
+    jpeg_compression:
+      enabled: true
+      p: 0.3
+      q_low: 50
+      q_high: 95
+    light_blur:
+      enabled: true
+      p: 0.2
+      sigma_low: 0.1
+      sigma_high: 1.5
+  output_dir: results/preprocessed/srad_nopad
+experiment:
+  name: finetune_zenodo
+  mode: finetune
+  preprocessing:
+  - srad_nopad
+  - gauss_nopad
+  models:
+  - resnet50
+  - resnet101
+  - densenet121
+  - densenet169
+  - efficientnet_b0
+  - convnext_tiny
+  - mobilenetv3_large
+  - vit_base
+  - swin_tiny
+  training:
+    optimizer: adamw
+    lr: 3.0e-05
+    weight_decay: 0.001
+    beta1: 0.9
+    beta2: 0.999
+    eps: 1.0e-08
+    scheduler: cosine_annealing
+    batch_size: 32
+    max_epochs: 15
+    early_stopping_patience: 5
+    warmup_epochs: 1
+    freeze_epochs: 0
+    monitor: val_auc
+    bf16: true
+    channels_last: true
+    grad_clip_norm: 1.0
+    ema: true
+    sampler: weighted
+    keep_last_n: 1
+  seed: 42
+  results_dir: results/finetune_zenodo/
+  data:
+    train_split: data_external/zenodo_splits/train.json
+    val_split: data_external/zenodo_splits/val.json
+    external_dir: data_external/test
+    external_layout: zenodo_labeled
+    resume_root: results/ablation_nopad/checkpoints/
+seed: 42

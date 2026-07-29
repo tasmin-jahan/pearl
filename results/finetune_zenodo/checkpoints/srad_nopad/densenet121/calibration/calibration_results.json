@@ -1,0 +1,10 @@
+{
+  "arch": "densenet121",
+  "preprocessing": "srad_nopad",
+  "n_test_samples": 1468,
+  "ece_full_before": 0.15491304420536176,
+  "ece_held_before": 0.13464216150252062,
+  "ece_held_after_temp": 0.14365930969469068,
+  "optimal_temperature": 2.544798753442573,
+  "n_bins": 15
+}

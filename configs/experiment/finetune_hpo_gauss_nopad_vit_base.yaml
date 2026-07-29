@@ -1,0 +1,46 @@
+name: finetune_hpo_gauss_nopad_vit_base
+mode: finetune_hpo
+preprocessing: gauss_nopad
+models: [vit_base]
+training:
+  optimizer: adamw
+  lr: 3.0e-05
+  weight_decay: 0.001
+  beta1: 0.9
+  beta2: 0.999
+  eps: 1.0e-08
+  scheduler: cosine_annealing
+  batch_size: 32
+  max_epochs: 8
+  early_stopping_patience: 3
+  warmup_epochs: 1
+  freeze_epochs: 0
+  monitor: val_auc
+  bf16: true
+  channels_last: true
+  grad_clip_norm: 1.0
+  ema: true
+  sampler: weighted
+  augmentation:
+    rotation: 10
+    horizontal_flip: true
+    scale: 0.1
+seed: 42
+results_dir: results/finetune_hpo/
+data:
+  train_split: data_external/zenodo_splits/train.json
+  val_split: data_external/zenodo_splits/val.json
+  resume_root: results/finetune_zenodo/checkpoints/
+  fine_tune_resume_from: results/finetune_zenodo/checkpoints/gauss_nopad/vit_base/best.pt
+n_trials_per_arch: 20
+top_k_finalists: 3
+pruner: median
+pruner_warmup_steps: 2
+search_space:
+  lr:               {low: 5.0e-6, high: 1.0e-4}
+  weight_decay:     {low: 1.0e-5, high: 1.0e-2}
+  dropout:          {low: 0.0,    high: 0.5}
+  rotation:         {low: 0,      high: 20}
+  label_smoothing:  {low: 0.0,    high: 0.1}
+  freeze_fraction:  {choices: [0.0, 0.5]}
+  batch_size:       {choices: [16, 32, 64]}

@@ -119,7 +119,7 @@ data/
   noninfected/      # PCOS-negative (label=0, 5000 images)
 \end{verbatim}
 
-\subsection{Data deduplication (v3.1)}
+\subsection{Data deduplication }
 
 \begin{figure}[h]
   \centering
@@ -129,8 +129,7 @@ data/
 \end{figure}
 
 The raw Figshare dataset ships with substantial exact-byte duplication
-within each class folder. MD5-hashing every image file (see
-\texttt{scripts/dedup\_data.py}) on the v3.1 release exposes the
+within each class folder. MD5-hashing every image file exposes the
 following structure on the 11{,}784 raw files:
 
 \begin{table}[h]
@@ -148,16 +147,12 @@ following structure on the 11{,}784 raw files:
                        \textbf{7{,}788} & \textbf{66.1\%} \\
     \bottomrule
   \end{tabular}
-  \caption{Pre-deduplication dataset inventory: the
-  exact-byte duplicates are byte-identical copies of other files in
-  the same class folder. The non-infected class is more affected
-  (83.8\%) because its original upload contained many fewer unique
-  source images.}
+  \caption{Pre/post-deduplication dataset inventory}
   \label{tab:dedup}
 \end{table}
 
-Almost no cross-class duplicates exist (verified by an exhaustive
-pairwise scan, not reported here), which is consistent with the
+Almost no cross-class duplicates exist, verified by an exhaustive
+pairwise scan, which is consistent with the
 folder-name labels being reliable: if labels were random, about half
 of cross-class pairs would collide. This is an indirect but strong
 indicator that the labels track real diagnostic decisions rather than
@@ -166,35 +161,11 @@ being arbitrary.
 Performing deduplication \emph{before} the train/val/test split is
 essential: a duplicate that survives into both train and val
 artificially inflates validation AUC by as much as the model
-memorises identical images. We therefore deduplicate first:
-
-\begin{verbatim}
-python /home/farhan/my-projects/pearl/scripts/dedup_data.py \
-    --data_dir /home/farhan/my-projects/pearl/data \
-    --mode report
-python /home/farhan/my-projects/pearl/scripts/dedup_data.py \
-    --data_dir /home/farhan/my-projects/pearl/data \
-    --mode quarantine
-\end{verbatim}
-
-Three modes are supported:
-\begin{itemize}[leftmargin=*]
-  \item \texttt{report} --- write \texttt{results/eda/dedup\_report.csv}
-        and \texttt{dedup\_details.csv}; do not touch any files.
-  \item \texttt{quarantine} --- move duplicates into
-        \texttt{data/\_duplicates/<class>/}; reversible.
-  \item \texttt{remove} --- permanently delete duplicates
-        (requires \texttt{-{}-yes}).
-\end{itemize}
-
-The deduplication is exact-byte (MD5). Near-duplicates that differ in
-JPEG re-encoding or minor cropping are not detected; perceptual
+memorises identical images. We therefore deduplicate first. The deduplication is exact-byte (MD5). Near-duplicates that differ in JPEG re-encoding or minor cropping are not detected; perceptual
 hashing was considered and rejected because (a) the dataset
 provenance indicates byte-identical re-uploads rather than re-
 encodings, and (b) perceptual thresholds would require a research-grade
-justification that is not the focus of this work.
-
-After deduplication the dataset shrinks to $3{,}184$ infected and
+justification that is not the focus of this work. After deduplication the dataset shrinks to $3{,}184$ infected and
 $812$ non-infected files (3{,}996 total, a 66.1\% reduction), and
 the next stage addresses the class imbalance that this deduplication
 exposes more sharply.
@@ -206,17 +177,15 @@ After deduplication the imbalance ratio \emph{worsens} to
 non-infected class dropped from 5{,}000 apparent files to 812 unique
 files (83.8\% redundancy), so its effective representation shrank
 more than the infected class did.
-We use \emph{two complementary mechanisms}, controlled by the
-\texttt{training.sampler} key:
+We use \emph{two complementary mechanisms}:
 
 \begin{enumerate}[leftmargin=*]
-  \item \textbf{Loss-level weighting} (\texttt{src/training/losses.py}):
+  \item \textbf{Loss-level weighting}:
         the per-class weight is
         $w_c = n_{\text{total}} / (2\,n_c)$, so the gradient contribution
         of each class is normalised. This is the default and is
         applied unconditionally.
-  \item \textbf{Data-level balancing} (\texttt{make\_weighted\_sampler}
-        in \texttt{src/data/dataloader.py}): when
+  \item \textbf{Data-level balancing}: when
         \texttt{training.sampler = "weighted"}, a
         \texttt{WeightedRandomSampler} draws minority-class examples
         more often so each batch sees the two classes in roughly equal
@@ -245,10 +214,7 @@ cancel when both are active.
 
 \subsection{80/10/10 split with patient-level leakage prevention}
 
-A 70/15/15 split (v1/v2) gives a val set of only $\sim 15\%$ of the
-data. The post-dedup Figshare dataset contains $\sim 4{,}000$ unique
-images, so the val and test sets are still large enough that 80/10/10
-gives more training data without sacrificing stable AUC estimates.
+Since the dataset contains approximately 4,000 unique images after deduplication, allocating only 10\% each to validation and testing still provides around 400 samples per split, while increasing the number of training samples by approximately 400 compared with a 70/15/15 split. without sacrificing stable AUC estimates.
 We use \texttt{StratifiedShuffleSplit} from scikit-learn twice:
 
 \begin{enumerate}[leftmargin=*]
@@ -424,20 +390,13 @@ with the preprocessing pipeline:
 
 Both augmentations are stochastic and applied \emph{at training time
 only}, after the preprocessor writes \texttt{.npy} files to disk.
-Validation and test splits receive un-augmented inputs only. The
-augmentations are configured under \texttt{augmentation.jpeg\_compression}
-and \texttt{augmentation.light\_blur} in every preprocessing YAML and
-are enabled by default in the v3 ablation configs.
+Validation and test splits receive un-augmented inputs only.
 
 \subsection{External validation: PCOSGen (Sundari et al. 2025)}
 
 To address the single-dataset limitation common in PCOS deep-learning
 publications, we additionally evaluate the trained checkpoints against
-the \textbf{PCOSGen} dataset (Sundari et al.\ 2025, hosted on Kaggle as
-\texttt{divyangambhir1/pcosgen-train} and \texttt{tanvi062/pcos-uls}).
-PCOSGen contains 4,668 transabdominal ultrasound images at $300 \times
-300$ resolution in JPEG, split into infected (PCOS-positive; label~1)
-and healthy (PCOS-negative; label~0). It is meaningfully cleaner than
+the \textbf{PCOSGen} dataset [citation needed]. It is meaningfully cleaner than
 the Figshare data we trained on:
 
 \begin{itemize}
@@ -452,15 +411,10 @@ the Figshare data we trained on:
     operating range of the WeightedRandomSampler we use.
 \end{itemize}
 
-The external evaluator (\texttt{scripts/evaluate\_external.py}) loads
-the raw PCOSGen images, applies the training preprocessing pipeline
-\emph{without augmentation}, and runs the same trained checkpoint that
-was selected by 5-fold cross-validation. No fine-tuning on PCOSGen is
+The external evaluator loads the raw PCOSGen images, applies the training preprocessing pipeline
+\emph{without augmentation}, and runs the same finetuned checkpoint. No fine-tuning on PCOSGen is
 performed; the reported metrics reflect pure cross-dataset
-generalisation of the Figshare-trained model. This separation is the
-defensible form of domain-shift evaluation at this scale; a paired
-degradation in AUC relative to the Figshare test split is expected and
-is itself an informative number.
+generalisation of the Figshare-trained model. This is to measure the quality of the pipeline. Afterwards, the existing checkpoints fine tuned on figshare datasaets are also further tuned on 5-fold cross validated dataset sampled from combined PCOS test-train dataset
 
 % =====================================================================
 \section{Model architecture}
@@ -468,11 +422,7 @@ is itself an informative number.
 
 \subsection{Backbone roster}
 
-v1/v2 used VGG16/19, ResNet50/101, DenseNet121/169, EfficientNet-B0/B4,
-and InceptionV3. v3 retires VGG16/19 (too shallow for transfer),
-InceptionV3 (auxiliary heads complicate transfer), and EfficientNet-B4
-(replaced for diversity at the same parameter scale). The new roster
-is 9 architectures, all standardised to $224 \times 224$:
+The roster is 9 architectures, all standardised to $224 \times 224$:
 
 \begin{table}[ht]
   \centering
@@ -492,13 +442,13 @@ is 9 architectures, all standardised to $224 \times 224$:
     Swin-Tiny        & \texttt{swin\_tiny\_patch4\_window7\_224} & 28.3 & 224 \\
     \bottomrule
   \end{tabular}
-  \caption{v3 model roster (9 architectures).}
+  \caption{model roster (9 architectures).}
   \label{tab:models}
 \end{table}
 
 \subsection{Classification head: SiLU with BatchNorm}
 
-v1/v2 used a ReLU-based head. v3 replaces it with:
+Classification head pipeline:
 
 \begin{verbatim}
 GlobalAvgPool -> Linear(in_features, 256) -> SiLU
@@ -513,10 +463,6 @@ ConvNeXt, and MobileNetV3, so the head is consistent with the
 backbone. BatchNorm between FC layers stabilises head training; we
 keep dropout only after the first activation (the most
 regularisation-sensitive spot).
-
-Crucially, the final \texttt{Linear} reads \texttt{num\_classes} from
-the config (was hard-coded to 2 in v1/v2). This is wired through in
-\texttt{src/model/builder.py}:
 
 \begin{lstlisting}[language=Python, basicstyle=\ttfamily\small]
 num_classes = model_config.get("num_classes", 2)
@@ -543,8 +489,7 @@ is linearly ramped from $\sim 0$ to the target LR. Optionally, the
 backbone can be frozen for \texttt{freeze\_epochs} (default 1) at the
 start of training so the head converges before the backbone is
 unfrozen; at unfreeze the LR is dropped by $\times 0.1$ before the
-main cosine schedule takes over. This is implemented in
-\texttt{Trainer.train}.
+main cosine schedule takes over.
 
 \subsection{Cosine annealing with warm restarts + gradient clipping}
 
@@ -581,47 +526,49 @@ Decaying BatchNorm $\gamma$ and $\beta$ is known to hurt calibration
 
 \subsection{Divergence guard (NaN/Inf)}
 
-We define \texttt{TrialDivergedError(RuntimeError)}. Inside
-\texttt{\_train\_one\_epoch}, after the forward pass:
+To detect and respond to training instability, we introduce a custom exception,
+\texttt{TrialDivergedError}, which is raised whenever numerical divergence is
+detected during a training step. This check is performed inside
+\texttt{\_train\_one\_epoch}, immediately following the forward and backward
+passes.
 
-\begin{lstlisting}[language=Python, basicstyle=\ttfamily\small]
-with torch.amp.autocast("cuda", dtype=bf16, enabled=use_amp):
-    logits = self.model(images)
-    loss = self.criterion(logits, labels)
-if not torch.isfinite(loss):
-    raise TrialDivergedError(
-        f"Non-finite loss at epoch {epoch}, step {self.global_step}"
-    )
-loss.backward()
-grad_norm = torch.nn.utils.clip_grad_norm_(
-    self.model.parameters(), max_norm=self.grad_clip_norm)
-if not torch.isfinite(grad_norm):
-    raise TrialDivergedError(
-        f"Non-finite grad norm at epoch {epoch}, step {self.global_step}"
-    )
-\end{lstlisting}
+After computing the loss for a batch, we verify that its value is finite. If
+it is not, we immediately raise \texttt{TrialDivergedError}. However, loss
+finiteness alone is not a sufficient indicator of stability: under bf16
+mixed-precision training (\texttt{torch.amp.autocast}), it is possible for the
+loss to remain finite while the gradients computed during backpropagation
+become non-finite. We therefore perform a second check on the gradient norm,
+computed after backpropagation and gradient clipping via
+\texttt{torch.nn.utils.clip\_grad\_norm\_}. If this value is also non-finite,
+we raise \texttt{TrialDivergedError} as well.
 
-\textbf{Both loss and gradient norm are checked.} With bf16 autocast,
-gradients can go non-finite even when loss looks finite, so checking
-only the loss is insufficient.
+Rather than skipping the offending batch and continuing training, this guard
+aborts the \emph{entire trial}. We adopt this design because a non-finite
+value observed mid-sweep is, in practice, almost always a symptom of an
+unstable hyperparameter configuration (e.g., an excessive learning rate)
+rather than an artifact of a single anomalous input. Continuing training past
+such a point wastes compute and can produce misleading results for the
+affected configuration.
 
-The guard \textbf{aborts the entire trial}, not just the batch. A NaN
-mid-sweep almost always signals a diverging configuration, not one
-bad image. In standalone \texttt{scripts/train.py} the exception
-propagates and crashes normally. In \texttt{src/training/tuner.py}
-the Optuna objective catches it and raises
-\texttt{optuna.exceptions.TrialPruned}, which prunes the trial
-cleanly.
+The behavior of this exception depends on the calling context. In standalone
+training runs (\texttt{scripts/train.py}), the exception propagates normally
+and halts execution. During hyperparameter search
+(\texttt{src/training/tuner.py}), the Optuna objective function catches
+\texttt{TrialDivergedError} and re-raises it as
+\texttt{optuna.exceptions.TrialPruned}, allowing the search to cleanly prune
+the diverging trial and proceed to the next configuration.
 
-\textbf{Precision note:} TF32 (\texttt{torch.backends.cuda.matmul.allow\_tf32=True})
-is safe to combine with bf16 autocast; TF32 retains FP32's exponent
-range and trims only mantissa precision, so it does not meaningfully
-raise NaN risk. The real NaN protection comes from grad clipping plus
-this guard.
+\paragraph{Precision note.} We additionally enable TF32 for matrix
+multiplications (\texttt{torch.backends.cuda.matmul.allow\_tf32=True}) alongside
+bf16 autocast. This combination is numerically safe: TF32 retains the full
+exponent range of FP32 and reduces only mantissa precision, so it does not
+meaningfully increase the risk of overflow or non-finite values. The primary
+safeguard against divergence in our setup is the combination of gradient
+clipping and the finiteness checks described above.
 
 \subsection{Throughput optimisations}
 
-The following are enabled by default in \texttt{Trainer}:
+The following are enabled by default in \texttt{Trainer Script}:
 
 \begin{itemize}[leftmargin=*]
   \item \texttt{torch.backends.cuda.matmul.allow\_tf32 = True}
@@ -637,31 +584,7 @@ The following are enabled by default in \texttt{Trainer}:
 \end{itemize}
 
 These typically yield a 1.5--3$\times$ throughput improvement on a
-modern GPU (RTX 4070 SUPER class) with no measurable accuracy loss.
-
-\subsection{De-duplicated train/val loop between Trainer and tuner}
-
-In v1/v2, \texttt{src/training/tuner.py} reimplemented the entire
-train/val loop independently of \texttt{Trainer}. Every fix in the
-list above (no-decay groups, NaN guard, grad clipping, AMP,
-channels-last) had to be manually duplicated into the tuner or the
-sweep silently ran without them.
-
-v3 reverses this: \texttt{make\_objective} instantiates and calls
-\texttt{Trainer} per trial, passing an \texttt{OptunaCallback} hook
-that the trainer invokes at the end of each epoch with
-\texttt{(epoch, val\_auc)}. The hook calls \texttt{trial.report()} and
-\texttt{trial.should\_prune()}, raising \texttt{TrialPruned} when
-appropriate. This way every training-pipeline improvement is
-applied exactly once, in \texttt{Trainer}, and the sweep inherits it
-automatically.
-
-\subsection{Code reuse sequence}
-
-Per the design notes, the de-duplication (\textbf{Phase 2.6}) was
-sequenced \textbf{before} the no-decay groups and divergence guard
-(\textbf{Phases 2.3--2.4}). Otherwise those fixes would have been
-written twice and drifted.
+modern GPU with no measurable accuracy loss.
 
 % =====================================================================
 \section{EMA, checkpoints, and resumability}
@@ -669,64 +592,58 @@ written twice and drifted.
 
 \subsection{EMA shadow weights}
 
-Exponential moving average (EMA) maintains a slow-moving shadow copy
-of trainable parameters. After each step:
+We maintain an exponential moving average (EMA) of the trainable
+parameters throughout training. After each optimization step, the
+shadow parameters are updated as
+\begin{equation}
+\text{shadow}_i \leftarrow \beta \cdot \text{shadow}_i + (1-\beta)\cdot \theta_i,
+\end{equation}
+with decay $\beta = 0.999$ by default. At test time, we evaluate using
+the EMA weights rather than the raw trained weights: we load the best
+checkpoint, temporarily substitute the EMA shadow parameters into the
+model, run test-set evaluation, and then restore the original weights.
 
-\begin{lstlisting}[language=Python, basicstyle=\ttfamily\small]
-shadow[name] = decay * shadow[name] + (1 - decay) * param
-\end{lstlisting}
+EMA is complementary to stochastic weight averaging (SWA, Section~X):
+EMA tracks a continuously decaying average of parameters along the
+entire training trajectory, whereas SWA averages weights over a
+window near the end of training. Both target flatter regions of the
+loss landscape via different statistics, and are inexpensive enough
+that using both together is strictly beneficial.
 
-with \texttt{decay=0.999} by default. After training, the trainer
-calls \texttt{\_evaluate\_test\_with\_ema}, which:
+\subsection{Checkpointing and resumability}
 
-\begin{enumerate}[leftmargin=*]
-  \item Loads the best \texttt{best.pt}.
-  \item Stores the current weights.
-  \item Copies the EMA shadow into the model.
-  \item Runs the test-set evaluation.
-  \item Restores the original weights.
-\end{enumerate}
+Each checkpoint is self-contained: in addition to model weights, it
+stores optimizer and scheduler state, EMA shadow weights, training
+metadata (epoch, global step, validation AUC, architecture name, class
+names), and the full RNG state (Python, NumPy, and PyTorch CPU/CUDA).
+This allows a run to be resumed exactly, or the model to be evaluated
+on the test set, from a single file with no additional context.
 
-EMA is \textbf{complementary} to SWA: EMA tracks a slow-moving
-average of weights along the training trajectory, SWA averages the
-weights over a window at the end. Both target flatter minima, on
-different statistics, and are cheap enough that running both is
-strictly an improvement.
+On resumption, RNG state is restored so that the data augmentation
+sequence is reproducible across interrupted runs, and training
+continues from the correct epoch with logs appended rather than
+overwritten. To support cheap SWA, the trainer retains the most recent
+$k$ checkpoints (default $k=3$) alongside the best checkpoint; SWA
+simply averages the weights across this small rolling window
+(see Appendix~X for implementation details).
 
-\subsection{Self-contained checkpoints}
+\subsection{Checkpoint implementation details}
+\label{app:checkpoints}
 
-Every \texttt{.pt} checkpoint includes:
-
-\begin{itemize}[leftmargin=*]
+Each \texttt{.pt} checkpoint contains the following fields:
+\begin{itemize}[leftmargin=*, noitemsep, topsep=2pt]
   \item \texttt{model\_state\_dict}
   \item \texttt{optimizer\_state\_dict}
   \item \texttt{scheduler\_state\_dict}
   \item \texttt{ema\_state\_dict}
   \item \texttt{epoch}, \texttt{global\_step}, \texttt{val\_auc}
   \item \texttt{arch\_name}, \texttt{class\_names}
-  \item \texttt{rng\_state} (Python, NumPy, PyTorch CPU, PyTorch CUDA)
+  \item \texttt{rng\_state}
 \end{itemize}
-
-A single checkpoint is enough to resume a run exactly and to perform
-test-set evaluation without any other context.
-
-\subsection{RNG and dataloader state resumption}
-
-When resuming, \texttt{Trainer.\_resume\_state} restores Python,
-NumPy, and PyTorch RNG state from the checkpoint so the augmentation
-sequence is reproducible across resumes. The trainer also sets
-\texttt{start\_epoch = epoch + 1}, so the resumed run continues from
-the right epoch. The CSV logger enters \textbf{append mode} (rather
-than overwriting) so the existing \texttt{epoch\_log.csv} is preserved.
-
-\subsection{Rolling-window checkpoint retention}
-
-The trainer keeps the last \texttt{keep\_last\_n} (default 3)
-checkpoints alongside \texttt{best.pt}, named
-\texttt{best\_\_epoch\{N\}.pt}. Older rolling checkpoints are pruned
-on each save. This is what makes SWA cheap: it just reads the most
-recent 3--5 files and averages their weights
-(\texttt{src/training/swa.py}).
+Rolling checkpoints are named \texttt{best\_\_epoch\{N\}.pt}; the
+\texttt{keep\_last\_n} most recent (default 3) are retained, and
+older ones are pruned on each save. SWA
+(\path{src/training/swa.py}) reads this rolling window directly.
 
 % =====================================================================
 \section{Hyperparameter search and cross-validation}

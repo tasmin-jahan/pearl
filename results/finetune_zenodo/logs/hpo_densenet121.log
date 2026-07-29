@@ -1,0 +1,220 @@
+[I 2026-07-29 20:32:10,356] A new study created in memory with name: srad_nopad_densenet121
+[HPO] densenet121 + srad_nopad
+[HPO] Resume from: results/finetune_zenodo/checkpoints/srad_nopad/densenet121/best.pt
+[HPO] Train: 2560, Val: 640
+[Builder] Frozen 0/362 parameters (0.0%)
+[Builder] Total params: 7,250,178, Trainable: 7,250,178
+[Checkpoint] Loaded from results/finetune_zenodo/checkpoints/srad_nopad/densenet121/best.pt (epoch=8, val_auc=0.9496)
+[Loss] Class weights: [0.5638766288757324, 4.413793087005615]
+[Checkpoint] Saved (epoch=1, val_auc=0.9497) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_0.pt
+[Checkpoint] Saved (epoch=1, val_auc=0.9497) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_0_e1.pt
+[Checkpoint] Saved (epoch=2, val_auc=0.9496) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_0_e2.pt
+[Checkpoint] Saved (epoch=3, val_auc=0.9534) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_0.pt
+[Checkpoint] Saved (epoch=3, val_auc=0.9534) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_0_e3.pt
+[Checkpoint] Saved (epoch=4, val_auc=0.9529) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_0_e4.pt
+[Checkpoint] Saved (epoch=5, val_auc=0.9500) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_0_e5.pt
+[Checkpoint] Saved (epoch=6, val_auc=0.9447) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_0_e6.pt
+[I 2026-07-29 20:34:43,842] Trial 0 finished with value: 0.9534 and parameters: {'lr': 1.4546717423724789e-05, 'weight_decay': 0.00667274324510841, 'dropout': 0.2752165220104928, 'rotation': 15, 'label_smoothing': 0.049591343022918705, 'freeze_fraction': 0.0, 'batch_size': 16}. Best is trial 0 with value: 0.9534.
+[Builder] Frozen 0/362 parameters (0.0%)
+[Builder] Total params: 7,250,178, Trainable: 7,250,178
+[Checkpoint] Loaded from results/finetune_zenodo/checkpoints/srad_nopad/densenet121/best.pt (epoch=8, val_auc=0.9496)
+[Loss] Class weights: [0.5638766288757324, 4.413793087005615]
+[Checkpoint] Saved (epoch=1, val_auc=0.9490) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_1.pt
+[Checkpoint] Saved (epoch=1, val_auc=0.9490) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_1_e1.pt
+[Checkpoint] Saved (epoch=2, val_auc=0.9510) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_1.pt
+[Checkpoint] Saved (epoch=2, val_auc=0.9510) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_1_e2.pt
+[Checkpoint] Saved (epoch=3, val_auc=0.9504) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_1_e3.pt
+[Checkpoint] Saved (epoch=4, val_auc=0.9512) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_1.pt
+[Checkpoint] Saved (epoch=4, val_auc=0.9512) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_1_e4.pt
+[Checkpoint] Saved (epoch=5, val_auc=0.9521) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_1.pt
+[Checkpoint] Saved (epoch=5, val_auc=0.9521) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_1_e5.pt
+[Checkpoint] Saved (epoch=6, val_auc=0.9517) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_1_e6.pt
+[Checkpoint] Saved (epoch=7, val_auc=0.9530) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_1.pt
+[Checkpoint] Saved (epoch=7, val_auc=0.9530) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_1_e7.pt
+[Checkpoint] Saved (epoch=8, val_auc=0.9529) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_1_e8.pt
+[I 2026-07-29 20:38:04,472] Trial 1 finished with value: 0.953 and parameters: {'lr': 6.087884643233371e-06, 'weight_decay': 0.0031810593542578812, 'dropout': 0.41374752140236176, 'rotation': 13, 'label_smoothing': 0.08029023746377456, 'freeze_fraction': 0.0, 'batch_size': 32}. Best is trial 0 with value: 0.9534.
+[Builder] Frozen 0/362 parameters (0.0%)
+[Builder] Total params: 7,250,178, Trainable: 7,250,178
+[Checkpoint] Loaded from results/finetune_zenodo/checkpoints/srad_nopad/densenet121/best.pt (epoch=8, val_auc=0.9496)
+[Loss] Class weights: [0.5638766288757324, 4.413793087005615]
+[Checkpoint] Saved (epoch=1, val_auc=0.9545) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_2.pt
+[Checkpoint] Saved (epoch=1, val_auc=0.9545) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_2_e1.pt
+[Checkpoint] Saved (epoch=2, val_auc=0.9535) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_2_e2.pt
+[Checkpoint] Saved (epoch=3, val_auc=0.9574) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_2.pt
+[Checkpoint] Saved (epoch=3, val_auc=0.9574) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_2_e3.pt
+[Checkpoint] Saved (epoch=4, val_auc=0.9493) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_2_e4.pt
+[Checkpoint] Saved (epoch=5, val_auc=0.9538) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_2_e5.pt
+[Checkpoint] Saved (epoch=6, val_auc=0.9545) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_2_e6.pt
+[I 2026-07-29 20:40:34,327] Trial 2 finished with value: 0.9574 and parameters: {'lr': 1.4185972678108478e-05, 'weight_decay': 0.004947465990383826, 'dropout': 0.062246105448323485, 'rotation': 12, 'label_smoothing': 0.0118954827483853, 'freeze_fraction': 0.0, 'batch_size': 16}. Best is trial 2 with value: 0.9574.
+[Builder] Frozen 0/362 parameters (0.0%)
+[Builder] Total params: 7,250,178, Trainable: 7,250,178
+[Checkpoint] Loaded from results/finetune_zenodo/checkpoints/srad_nopad/densenet121/best.pt (epoch=8, val_auc=0.9496)
+[Loss] Class weights: [0.5638766288757324, 4.413793087005615]
+[Checkpoint] Saved (epoch=1, val_auc=0.9551) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_3.pt
+[Checkpoint] Saved (epoch=1, val_auc=0.9551) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_3_e1.pt
+[Checkpoint] Saved (epoch=2, val_auc=0.9508) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_3_e2.pt
+[Checkpoint] Saved (epoch=3, val_auc=0.9525) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_3_e3.pt
+[Checkpoint] Saved (epoch=4, val_auc=0.9467) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_3_e4.pt
+[I 2026-07-29 20:42:16,256] Trial 3 finished with value: 0.9551 and parameters: {'lr': 1.2492554175683951e-05, 'weight_decay': 6.554174364892207e-05, 'dropout': 0.06470573778172711, 'rotation': 9, 'label_smoothing': 0.09624681160155643, 'freeze_fraction': 0.0, 'batch_size': 16}. Best is trial 2 with value: 0.9574.
+[Builder] Frozen 0/362 parameters (0.0%)
+[Builder] Total params: 7,250,178, Trainable: 7,250,178
+[Checkpoint] Loaded from results/finetune_zenodo/checkpoints/srad_nopad/densenet121/best.pt (epoch=8, val_auc=0.9496)
+[Loss] Class weights: [0.5638766288757324, 4.413793087005615]
+[Checkpoint] Saved (epoch=1, val_auc=0.9505) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_4.pt
+[Checkpoint] Saved (epoch=1, val_auc=0.9505) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_4_e1.pt
+[Checkpoint] Saved (epoch=2, val_auc=0.9444) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_4_e2.pt
+[Checkpoint] Saved (epoch=3, val_auc=0.9534) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_4.pt
+[Checkpoint] Saved (epoch=3, val_auc=0.9534) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_4_e3.pt
+[Checkpoint] Saved (epoch=4, val_auc=0.9443) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_4_e4.pt
+[Checkpoint] Saved (epoch=5, val_auc=0.9480) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_4_e5.pt
+[Checkpoint] Saved (epoch=6, val_auc=0.9464) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_4_e6.pt
+[I 2026-07-29 20:44:46,696] Trial 4 finished with value: 0.9534 and parameters: {'lr': 8.953723116941149e-05, 'weight_decay': 0.00046771995064735485, 'dropout': 0.032167001004309914, 'rotation': 5, 'label_smoothing': 0.04678288094650954, 'freeze_fraction': 0.0, 'batch_size': 32}. Best is trial 2 with value: 0.9574.
+[Builder] Frozen 181/362 parameters (50.0%)
+[Builder] Total params: 7,250,178, Trainable: 4,854,338
+[Checkpoint] Loaded from results/finetune_zenodo/checkpoints/srad_nopad/densenet121/best.pt (epoch=8, val_auc=0.9496)
+[Loss] Class weights: [0.5638766288757324, 4.413793087005615]
+[Checkpoint] Saved (epoch=1, val_auc=0.9530) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_5.pt
+[Checkpoint] Saved (epoch=1, val_auc=0.9530) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_5_e1.pt
+[Checkpoint] Saved (epoch=2, val_auc=0.9520) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_5_e2.pt
+[I 2026-07-29 20:45:58,235] Trial 5 pruned. 
+[Checkpoint] Saved (epoch=3, val_auc=0.9496) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_5_e3.pt
+[Builder] Frozen 181/362 parameters (50.0%)
+[Builder] Total params: 7,250,178, Trainable: 4,854,338
+[Checkpoint] Loaded from results/finetune_zenodo/checkpoints/srad_nopad/densenet121/best.pt (epoch=8, val_auc=0.9496)
+[Loss] Class weights: [0.5638766288757324, 4.413793087005615]
+[Checkpoint] Saved (epoch=1, val_auc=0.9531) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_6.pt
+[Checkpoint] Saved (epoch=1, val_auc=0.9531) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_6_e1.pt
+[Checkpoint] Saved (epoch=2, val_auc=0.9511) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_6_e2.pt
+[I 2026-07-29 20:47:09,974] Trial 6 pruned. 
+[Checkpoint] Saved (epoch=3, val_auc=0.9475) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_6_e3.pt
+[Builder] Frozen 0/362 parameters (0.0%)
+[Builder] Total params: 7,250,178, Trainable: 7,250,178
+[Checkpoint] Loaded from results/finetune_zenodo/checkpoints/srad_nopad/densenet121/best.pt (epoch=8, val_auc=0.9496)
+[Loss] Class weights: [0.5638766288757324, 4.413793087005615]
+[Checkpoint] Saved (epoch=1, val_auc=0.9530) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_7.pt
+[Checkpoint] Saved (epoch=1, val_auc=0.9530) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_7_e1.pt
+[Checkpoint] Saved (epoch=2, val_auc=0.9512) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_7_e2.pt
+[I 2026-07-29 20:48:29,732] Trial 7 pruned. 
+[Checkpoint] Saved (epoch=3, val_auc=0.9512) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_7_e3.pt
+[Builder] Frozen 0/362 parameters (0.0%)
+[Builder] Total params: 7,250,178, Trainable: 7,250,178
+[Checkpoint] Loaded from results/finetune_zenodo/checkpoints/srad_nopad/densenet121/best.pt (epoch=8, val_auc=0.9496)
+[Loss] Class weights: [0.5638766288757324, 4.413793087005615]
+[Checkpoint] Saved (epoch=1, val_auc=0.9416) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_8.pt
+[Checkpoint] Saved (epoch=1, val_auc=0.9416) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_8_e1.pt
+[Checkpoint] Saved (epoch=2, val_auc=0.9552) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_8.pt
+[Checkpoint] Saved (epoch=2, val_auc=0.9552) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_8_e2.pt
+[Checkpoint] Saved (epoch=3, val_auc=0.9458) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_8_e3.pt
+[Checkpoint] Saved (epoch=4, val_auc=0.9497) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_8_e4.pt
+[Checkpoint] Saved (epoch=5, val_auc=0.9482) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_8_e5.pt
+[I 2026-07-29 20:50:41,970] Trial 8 finished with value: 0.9552 and parameters: {'lr': 9.457386095120593e-05, 'weight_decay': 0.005921817099981224, 'dropout': 0.3392459124769569, 'rotation': 14, 'label_smoothing': 0.002635338835288603, 'freeze_fraction': 0.0, 'batch_size': 64}. Best is trial 2 with value: 0.9574.
+[Builder] Frozen 181/362 parameters (50.0%)
+[Builder] Total params: 7,250,178, Trainable: 4,854,338
+[Checkpoint] Loaded from results/finetune_zenodo/checkpoints/srad_nopad/densenet121/best.pt (epoch=8, val_auc=0.9496)
+[Loss] Class weights: [0.5638766288757324, 4.413793087005615]
+[Checkpoint] Saved (epoch=1, val_auc=0.9538) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_9.pt
+[Checkpoint] Saved (epoch=1, val_auc=0.9538) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_9_e1.pt
+[Checkpoint] Saved (epoch=2, val_auc=0.9556) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_9.pt
+[Checkpoint] Saved (epoch=2, val_auc=0.9556) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_9_e2.pt
+[Checkpoint] Saved (epoch=3, val_auc=0.9493) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_9_e3.pt
+[Checkpoint] Saved (epoch=4, val_auc=0.9535) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_9_e4.pt
+[Checkpoint] Saved (epoch=5, val_auc=0.9387) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_9_e5.pt
+[I 2026-07-29 20:52:52,170] Trial 9 finished with value: 0.9556 and parameters: {'lr': 6.762782370744776e-05, 'weight_decay': 1.1334800565891579e-05, 'dropout': 0.10806007742269319, 'rotation': 18, 'label_smoothing': 0.05002301384087937, 'freeze_fraction': 0.5, 'batch_size': 64}. Best is trial 2 with value: 0.9574.
+[Builder] Frozen 181/362 parameters (50.0%)
+[Builder] Total params: 7,250,178, Trainable: 4,854,338
+[Checkpoint] Loaded from results/finetune_zenodo/checkpoints/srad_nopad/densenet121/best.pt (epoch=8, val_auc=0.9496)
+[Loss] Class weights: [0.5638766288757324, 4.413793087005615]
+[Checkpoint] Saved (epoch=1, val_auc=0.9486) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_10.pt
+[Checkpoint] Saved (epoch=1, val_auc=0.9486) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_10_e1.pt
+[I 2026-07-29 20:53:40,458] Trial 10 pruned. 
+[Checkpoint] Saved (epoch=2, val_auc=0.9500) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_10.pt
+[Checkpoint] Saved (epoch=2, val_auc=0.9500) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_10_e2.pt
+[Builder] Frozen 181/362 parameters (50.0%)
+[Builder] Total params: 7,250,178, Trainable: 4,854,338
+[Checkpoint] Loaded from results/finetune_zenodo/checkpoints/srad_nopad/densenet121/best.pt (epoch=8, val_auc=0.9496)
+[Loss] Class weights: [0.5638766288757324, 4.413793087005615]
+[Checkpoint] Saved (epoch=1, val_auc=0.9452) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_11.pt
+[Checkpoint] Saved (epoch=1, val_auc=0.9452) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_11_e1.pt
+[I 2026-07-29 20:54:29,938] Trial 11 pruned. 
+[Checkpoint] Saved (epoch=2, val_auc=0.9447) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_11_e2.pt
+[Builder] Frozen 181/362 parameters (50.0%)
+[Builder] Total params: 7,250,178, Trainable: 4,854,338
+[Checkpoint] Loaded from results/finetune_zenodo/checkpoints/srad_nopad/densenet121/best.pt (epoch=8, val_auc=0.9496)
+[Loss] Class weights: [0.5638766288757324, 4.413793087005615]
+[Checkpoint] Saved (epoch=1, val_auc=0.9501) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_12.pt
+[Checkpoint] Saved (epoch=1, val_auc=0.9501) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_12_e1.pt
+[I 2026-07-29 20:55:19,680] Trial 12 pruned. 
+[Checkpoint] Saved (epoch=2, val_auc=0.9489) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_12_e2.pt
+[Builder] Frozen 181/362 parameters (50.0%)
+[Builder] Total params: 7,250,178, Trainable: 4,854,338
+[Checkpoint] Loaded from results/finetune_zenodo/checkpoints/srad_nopad/densenet121/best.pt (epoch=8, val_auc=0.9496)
+[Loss] Class weights: [0.5638766288757324, 4.413793087005615]
+[Checkpoint] Saved (epoch=1, val_auc=0.9481) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_13.pt
+[Checkpoint] Saved (epoch=1, val_auc=0.9481) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_13_e1.pt
+[I 2026-07-29 20:56:07,526] Trial 13 pruned. 
+[Checkpoint] Saved (epoch=2, val_auc=0.9436) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_13_e2.pt
+[Builder] Frozen 0/362 parameters (0.0%)
+[Builder] Total params: 7,250,178, Trainable: 7,250,178
+[Checkpoint] Loaded from results/finetune_zenodo/checkpoints/srad_nopad/densenet121/best.pt (epoch=8, val_auc=0.9496)
+[Loss] Class weights: [0.5638766288757324, 4.413793087005615]
+[Checkpoint] Saved (epoch=1, val_auc=0.9485) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_14.pt
+[Checkpoint] Saved (epoch=1, val_auc=0.9485) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_14_e1.pt
+[I 2026-07-29 20:56:58,047] Trial 14 pruned. 
+[Checkpoint] Saved (epoch=2, val_auc=0.9419) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_14_e2.pt
+[Builder] Frozen 181/362 parameters (50.0%)
+[Builder] Total params: 7,250,178, Trainable: 4,854,338
+[Checkpoint] Loaded from results/finetune_zenodo/checkpoints/srad_nopad/densenet121/best.pt (epoch=8, val_auc=0.9496)
+[Loss] Class weights: [0.5638766288757324, 4.413793087005615]
+[Checkpoint] Saved (epoch=1, val_auc=0.9327) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_15.pt
+[Checkpoint] Saved (epoch=1, val_auc=0.9327) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_15_e1.pt
+[I 2026-07-29 20:57:46,316] Trial 15 pruned. 
+[Checkpoint] Saved (epoch=2, val_auc=0.9458) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_15.pt
+[Checkpoint] Saved (epoch=2, val_auc=0.9458) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_15_e2.pt
+[Builder] Frozen 181/362 parameters (50.0%)
+[Builder] Total params: 7,250,178, Trainable: 4,854,338
+[Checkpoint] Loaded from results/finetune_zenodo/checkpoints/srad_nopad/densenet121/best.pt (epoch=8, val_auc=0.9496)
+[Loss] Class weights: [0.5638766288757324, 4.413793087005615]
+[Checkpoint] Saved (epoch=1, val_auc=0.9480) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_16.pt
+[Checkpoint] Saved (epoch=1, val_auc=0.9480) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_16_e1.pt
+[I 2026-07-29 20:58:36,032] Trial 16 pruned. 
+[Checkpoint] Saved (epoch=2, val_auc=0.9486) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_16.pt
+[Checkpoint] Saved (epoch=2, val_auc=0.9486) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_16_e2.pt
+[Builder] Frozen 0/362 parameters (0.0%)
+[Builder] Total params: 7,250,178, Trainable: 7,250,178
+[Checkpoint] Loaded from results/finetune_zenodo/checkpoints/srad_nopad/densenet121/best.pt (epoch=8, val_auc=0.9496)
+[Loss] Class weights: [0.5638766288757324, 4.413793087005615]
+[Checkpoint] Saved (epoch=1, val_auc=0.9547) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_17.pt
+[Checkpoint] Saved (epoch=1, val_auc=0.9547) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_17_e1.pt
+[Checkpoint] Saved (epoch=2, val_auc=0.9520) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_17_e2.pt
+[Checkpoint] Saved (epoch=3, val_auc=0.9494) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_17_e3.pt
+[Checkpoint] Saved (epoch=4, val_auc=0.9570) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_17.pt
+[Checkpoint] Saved (epoch=4, val_auc=0.9570) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_17_e4.pt
+[Checkpoint] Saved (epoch=5, val_auc=0.9504) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_17_e5.pt
+[Checkpoint] Saved (epoch=6, val_auc=0.9495) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_17_e6.pt
+[Checkpoint] Saved (epoch=7, val_auc=0.9491) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_17_e7.pt
+[I 2026-07-29 21:01:29,962] Trial 17 finished with value: 0.957 and parameters: {'lr': 8.846109157881904e-06, 'weight_decay': 6.666359171335679e-05, 'dropout': 0.05718005600184187, 'rotation': 4, 'label_smoothing': 0.012003715076441343, 'freeze_fraction': 0.0, 'batch_size': 16}. Best is trial 2 with value: 0.9574.
+[Builder] Frozen 0/362 parameters (0.0%)
+[Builder] Total params: 7,250,178, Trainable: 7,250,178
+[Checkpoint] Loaded from results/finetune_zenodo/checkpoints/srad_nopad/densenet121/best.pt (epoch=8, val_auc=0.9496)
+[Loss] Class weights: [0.5638766288757324, 4.413793087005615]
+[Checkpoint] Saved (epoch=1, val_auc=0.9587) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_18.pt
+[Checkpoint] Saved (epoch=1, val_auc=0.9587) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_18_e1.pt
+[Checkpoint] Saved (epoch=2, val_auc=0.9501) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_18_e2.pt
+[Checkpoint] Saved (epoch=3, val_auc=0.9523) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_18_e3.pt
+[Checkpoint] Saved (epoch=4, val_auc=0.9554) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_18_e4.pt
+[I 2026-07-29 21:03:12,390] Trial 18 finished with value: 0.9587 and parameters: {'lr': 1.0039369272987676e-05, 'weight_decay': 0.0010793153738284137, 'dropout': 0.0035988467000480848, 'rotation': 0, 'label_smoothing': 0.013248311775154101, 'freeze_fraction': 0.0, 'batch_size': 16}. Best is trial 18 with value: 0.9587.
+[Builder] Frozen 0/362 parameters (0.0%)
+[Builder] Total params: 7,250,178, Trainable: 7,250,178
+[Checkpoint] Loaded from results/finetune_zenodo/checkpoints/srad_nopad/densenet121/best.pt (epoch=8, val_auc=0.9496)
+[Loss] Class weights: [0.5638766288757324, 4.413793087005615]
+[Checkpoint] Saved (epoch=1, val_auc=0.9527) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_19.pt
+[Checkpoint] Saved (epoch=1, val_auc=0.9527) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_19_e1.pt
+[Checkpoint] Saved (epoch=2, val_auc=0.9535) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_19.pt
+[Checkpoint] Saved (epoch=2, val_auc=0.9535) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_19_e2.pt
+[Checkpoint] Saved (epoch=3, val_auc=0.9515) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_19_e3.pt
+[Checkpoint] Saved (epoch=4, val_auc=0.9496) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_19_e4.pt
+[Checkpoint] Saved (epoch=5, val_auc=0.9473) → results/finetune_hpo/srad_nopad_densenet121/densenet121/trial_19_e5.pt
+[I 2026-07-29 21:05:18,536] Trial 19 finished with value: 0.9535 and parameters: {'lr': 9.323459642171911e-06, 'weight_decay': 0.0013688355913698284, 'dropout': 0.007904220859780667, 'rotation': 0, 'label_smoothing': 0.03715217774423627, 'freeze_fraction': 0.0, 'batch_size': 16}. Best is trial 18 with value: 0.9587.
+[HPO] Best val_auc: 0.9587
+[HPO] Best params: {'lr': 1.0039369272987676e-05, 'weight_decay': 0.0010793153738284137, 'dropout': 0.0035988467000480848, 'rotation': 0, 'label_smoothing': 0.013248311775154101, 'freeze_fraction': 0.0, 'batch_size': 16}
+[HPO] Summary: results/finetune_hpo/srad_nopad_densenet121/densenet121/summary.json

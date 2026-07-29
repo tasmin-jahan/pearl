@@ -164,6 +164,25 @@ def discover_with_split(dataset_root: str, split: str) -> List[Tuple[str, int]]:
     return pairs
 
 
+def discover_zenodo_labeled(dataset_root: str, split: str = "train") -> List[Tuple[str, int]]:
+    """Discover (path, label) pairs from the Zenodo PCOSgen source layout.
+
+    Layout:
+        <dataset_root>/images/*.jpg
+        <dataset_root>/class_label.xlsx  (train) or 'class label.csv' (test)
+
+    The label is read from the LAST column (the "polycystic ovary visible"
+    column); "Visible" -> 1, anything else -> 0. Pairs whose image filename
+    is missing from the label table are skipped.
+
+    The `split` argument is ignored — the layout is self-describing. It is
+    accepted for parity with `discover_simple`.
+    """
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+    from src.data.zenodo_dataset import discover_zenodo_pairs
+    return discover_zenodo_pairs(dataset_root)
+
+
 def discover(dataset_root: str, layout: str, split: str = "test") -> List[Tuple[str, int]]:
     """Top-level discovery dispatcher."""
     if layout == "pcosgen":
@@ -173,6 +192,8 @@ def discover(dataset_root: str, layout: str, split: str = "test") -> List[Tuple[
         return discover_with_split(dataset_root, split)
     elif layout == "flat":
         return discover_simple(dataset_root)
+    elif layout == "zenodo_labeled":
+        return discover_zenodo_labeled(dataset_root, split)
     else:
         raise ValueError(f"Unknown layout: {layout}")
 
@@ -300,7 +321,7 @@ def main():
     parser.add_argument("--external_dir", type=str, default=None,
                         help="Root directory of the external dataset.")
     parser.add_argument("--layout", type=str, default="pcosgen",
-                        choices=["pcosgen", "simple", "flat"],
+                        choices=["pcosgen", "simple", "flat", "zenodo_labeled"],
                         help="External dataset layout.")
     parser.add_argument("--split", type=str, default="test",
                         help="For 'simple' layout: which split to use.")

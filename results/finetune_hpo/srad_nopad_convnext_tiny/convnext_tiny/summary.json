@@ -1,0 +1,17 @@
+{
+  "arch": "convnext_tiny",
+  "preprocessing": "srad_nopad",
+  "best_val_auc": 0.9629,
+  "best_params": {
+    "lr": 6.6219186068968326e-06,
+    "weight_decay": 0.0011876598801919714,
+    "dropout": 0.3094930096246087,
+    "rotation": 13,
+    "label_smoothing": 0.02959271508407553,
+    "freeze_fraction": 0.0,
+    "batch_size": 32
+  },
+  "n_trials": 20,
+  "n_complete": 16,
+  "n_pruned": 4
+}
