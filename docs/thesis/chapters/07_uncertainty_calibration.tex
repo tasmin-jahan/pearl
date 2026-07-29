@@ -1,0 +1,175 @@
+% =====================================================================
+% Chapter 7 -- Uncertainty, Calibration, and Explainability
+% =====================================================================
+\documentclass[../preamble.tex]{subfiles}
+\begin{document}
+
+\chapter{Uncertainty, Calibration, and Explainability}
+\label{ch:trust}
+
+\section{Operating-point selection}
+\label{sec:trust-op}
+
+The default decision threshold of 0.5 is rarely the right choice for an
+imbalanced, screening-oriented classifier. The thesis therefore computes
+three operating points:
+
+\begin{itemize}
+  \item the default $0.5$ threshold,
+  \item the Youden-J operating point, which maximises $\mathrm{sensitivity} +
+        \mathrm{specificity} - 1$, and
+  \item the sensitivity-targeted operating point, which fixes
+        $\mathrm{sensitivity} = 0.95$ and reads the resulting threshold.
+\end{itemize}
+
+The threshold-sweep figure in \cref{fig:threshold-sweep} shows the full
+sensitivity / specificity / F1 curves, with the three operating points
+highlighted.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{figures/thesis_threshold_sweep.png}
+  \caption{Threshold sweep for the pre-HPO ensemble on the held-out PCOSgen
+           test set. The Youden-J threshold is 0.6198 and the
+           sensitivity-targeted threshold is 0.7597.}
+  \label{fig:threshold-sweep}
+\end{figure}
+
+\section{Calibration}
+\label{sec:trust-calib}
+
+Neural networks are systematically overconfident on classification tasks
+\cite{guo2017}. Temperature scaling, which divides the logits by a learned
+scalar $T$, preserves the original accuracy while improving the calibration
+error. The thesis applies temperature scaling in two passes:
+
+\begin{enumerate}
+  \item \textbf{Pass 1.} For each model, learn $T_i$ on the validation set
+        using
+        \begin{equation}
+          T_i = \arg\min_T \mathrm{NLL}(\sigma(z_i / T),\, y_i),
+          \label{eq:temp-each}
+        \end{equation}
+        where $z_i$ are the logits, $y_i$ are the labels, and $\sigma$ is the
+        softmax operator.
+  \item \textbf{Pass 2.} Average the calibrated probabilities across the
+        three ensemble members, then learn a single $T_{\mathrm{ens}}$ on the
+        same validation set.
+\end{enumerate}
+
+The two-pass procedure is summarised in \cref{alg:two-pass-calib}. The
+per-model and ensemble temperatures, the intermediate ECE, and the final ECE
+are recorded in \cref{tab:calibration-detail}.
+
+\begin{algorithm}[htbp]
+  \caption{Two-pass temperature scaling for the ensemble.}
+  \label{alg:two-pass-calib}
+  \begin{algorithmic}[1]
+    \State Inputs: validation logits $\{z_i\}$, validation labels $\{y_i\}$,
+                   ensemble members $\{m_1, m_2, m_3\}$.
+    \For{each $m_k \in \{m_1, m_2, m_3\}$}
+      \State $T_k \gets \arg\min_{T \in [0.1, 10]} \mathrm{NLL}(\sigma(z_k / T), y_k)$.
+    \EndFor
+    \State $p_{\mathrm{avg}} \gets \frac{1}{3}\sum_{k=1}^{3} \sigma(z_k / T_k)$.
+    \State $T_{\mathrm{ens}} \gets \arg\min_{T \in [0.1, 10]} \mathrm{NLL}(p_{\mathrm{avg}}^{1/T}, y)$.
+    \State Return calibrated probabilities
+            $\sigma(z_k / T_k)$ per member and $p_{\mathrm{avg}}^{1/T_{\mathrm{ens}}}$
+            for the ensemble.
+  \end{algorithmic}
+\end{algorithm}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{figures/paper_fig_calibration_compare.png}
+  \caption{Per-model calibration before and after temperature scaling. See
+           \cref{tab:calibration-detail} for the exact values.}
+  \label{fig:calibration}
+\end{figure}
+
+\input{../tables/calibration_detail.tex}
+
+The reduction in ECE is modest in absolute terms (0.0854 to 0.0810) but the
+calibration plot shows a meaningful alignment of predicted probabilities
+with observed accuracy. All three fine-tuned members and the ensemble are
+overconfident before temperature scaling; the ensemble temperature is the
+smallest of the four values, which is consistent with averaging reducing
+individual-model variance.
+
+\section{Uncertainty}
+\label{sec:trust-unc}
+
+Predictive uncertainty is estimated using MC-Dropout with dropout active at
+inference time \cite{gal2016}. For each test image, 50 stochastic forward
+passes are performed and the predictive entropy is computed:
+\begin{equation}
+  \mathbb{H}(\hat{y}) = -\sum_{c \in \{0,1\}} \bar{p}_c \log \bar{p}_c,
+  \label{eq:entropy}
+\end{equation}
+where $\bar{p}_c$ is the mean posterior probability of class $c$ across the
+50 passes.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{figures/thesis_uncertainty_hist.png}
+  \caption{MC-Dropout entropy distributions for the three ensemble members,
+           showing a clear separation between correctly and incorrectly
+           classified cases. The mean entropies are 0.234 nats (DenseNet-121),
+           0.215 nats (ConvNeXt-Tiny), and 0.160 nats (ViT-B/16).}
+  \label{fig:uncertainty-hist}
+\end{figure}
+
+The ViT-B/16 model has the lowest mean entropy (0.160 nats), suggesting it
+remembers more confident posteriors; the DenseNet-121 has the highest mean
+entropy (0.234 nats). The median entropy follows the same ordering. The
+broader distribution of correct-case entropies for the convolutional models
+indicates that uncertainty is not a simple proxy for correctness, but a
+useful complementary signal.
+
+\section{Uncertainty-gated referral as a design concept}
+\label{sec:trust-referral}
+
+The original FYDP brief proposed an uncertainty-gated clinical referral
+mechanism: route the patient to a clinician not only when the model
+predicts PCOS but also when the model is uncertain. This thesis implements
+that mechanism as a design concept and reports the per-coverage cohort
+statistics, but does not deploy the mechanism in a clinical workflow. The
+trade-off between auto-decided coverage and accuracy on the auto-decided
+subset is recorded in the per-checkpoint \texttt{mc\_dropout\_results.json}
+files. A deployed version would require a prospective study, a defined
+confidence threshold, and a calibrated human-cost function.
+
+\section{Explainability}
+\label{sec:trust-xai}
+
+The thesis uses Grad-CAM to expose the regions of an image that most
+influenced the prediction \cite{selvaraju2017}. Grad-CAM is computed on the
+final convolutional layer of each backbone, so the spatial resolution is
+limited to the receptive field of the deepest feature map. For ViT-B/16,
+whose "final convolutional layer" is a transformer block, the hook is
+attached to the last normalisation layer.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{figures/paper_fig_xai_grid.png}
+  \caption{Grad-CAM grid for the three ensemble members. Each row shows
+           representative correct, uncertain, and incorrect cases.}
+  \label{fig:xai-grid}
+\end{figure}
+
+The qualitative observation is that on cases the model gets correct, the
+Grad-CAM signal is concentrated on the central ovarian region. On cases
+the model gets wrong, the activation tends to spill onto the image border or
+the bottom-corner region, which is consistent with the letterbox-padding
+shortcut described in \cref{ch:preprocessing}. After the padding shortcut is
+removed, this border-driven behaviour is greatly reduced.
+
+\section{Summary}
+\label{sec:trust-summary}
+
+The calibration, uncertainty, and XAI components are complementary views
+of the same trained model. Calibration adjusts the model's confidence,
+MC-Dropout separates high-confidence from low-confidence predictions, and
+Grad-CAM provides a region-level explanation. Together they address the
+trust gap that aggregate metrics alone cannot fill.
+
+\end{document}

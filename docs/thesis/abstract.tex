@@ -1,0 +1,37 @@
+% PEARL Thesis -- Abstract
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+Polycystic Ovary Syndrome (PCOS) is a heterogeneous endocrine disorder whose
+ultrasound manifestations are difficult to assess consistently because images
+contain speckle noise, low contrast, and acquisition-dependent variation. This
+thesis presents \PEARL{}, a trust-oriented deep-learning pipeline for binary
+PCOS classification from ovarian ultrasound images. The work focuses not only
+on discrimination, but also on cross-dataset generalisation, calibration,
+uncertainty estimation, and visual explanation.
+
+The executed pipeline first evaluated nine ImageNet-pretrained backbones under
+SRAD and Gaussian denoising on the deduplicated Figshare PCOS ultrasound
+dataset. The strongest foundation models were then adapted to the PCOSgen
+cohort using a train-pool/held-out-test protocol. The final pre-HPO ensemble
+averages probabilities from DenseNet-121, ConvNeXt-Tiny, and ViT-B/16. On the
+held-out PCOSgen test set of 1,468 images, the ensemble achieved an AUC of
+0.9487 (95\% CI: 0.9368--0.9596), F1 of 0.8665, MCC of 0.7884, and Brier score
+of 0.0981. Two-pass temperature scaling reduced ensemble ECE from 0.0854 to
+0.0810. MC-Dropout with 50 stochastic passes provided predictive-entropy
+summaries, while Grad-CAM exposed representative correct, uncertain, and
+failure cases.
+
+The results also expose a substantial domain-shift effect. Foundation
+checkpoints performed strongly on the internal Figshare split but collapsed on
+zero-shot PCOSgen evaluation. Fine-tuning on the PCOSgen training pool
+recovered external AUC into the 0.93 range, and probability averaging improved
+the final result further. The thesis documents the complete methodology,
+including deduplication, split construction, SRAD, augmentation, model
+training, HPO, calibration, uncertainty, explainability, reproducibility, and
+the difference between features designed in the pipeline specification and
+features actually used in the reported run.
+
+\textbf{Keywords:} Polycystic Ovary Syndrome, ovarian ultrasound, transfer
+learning, cross-dataset generalisation, Speckle-Reducing Anisotropic Diffusion,
+calibration, MC-Dropout, Grad-CAM, uncertainty estimation, ensemble learning.

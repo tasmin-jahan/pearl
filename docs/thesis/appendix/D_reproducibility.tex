@@ -1,0 +1,132 @@
+% =====================================================================
+% Appendix D -- Reproducibility
+% =====================================================================
+\documentclass[../preamble.tex]{subfiles}
+\begin{document}
+
+\chapter{Reproducibility}
+\label{app:reproducibility}
+
+\section{Hardware and software}
+\label{app:repro-hw-sw}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Reproducibility summary.}
+  \label{tab:repro-summary}
+  \begin{tabular}{ll}
+    \toprule
+    \textbf{Item} & \textbf{Value} \\
+    \midrule
+    GPU            & NVIDIA RTX 4070 SUPER, 12\,GB \\
+    OS             & Linux (Ubuntu 22.04 LTS) \\
+    Python         & 3.10+ \\
+    PyTorch        & 2.12.0+cu130 \\
+    timm           & 1.0.27 \\
+    scikit-learn   & 1.9.0 \\
+    Optuna         & 4.9.0 \\
+    scipy          & 1.17.1 \\
+    numpy          & 2.4.4 \\
+    OpenCV         & 4.13.0.92 \\
+    matplotlib     & 3.10.9 \\
+    Wall-clock (foundation + fine-tune) & approx.\ 5--6 hours \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Seed policy}
+\label{app:repro-seed}
+
+The trainer sets Python, NumPy, and PyTorch seeds at the start of every
+run. CUDA seeding is best-effort: deterministic algorithms are enabled
+where available, and a deterministic fallback is documented for non-deterministic
+operators.
+
+\section{Repository entry points}
+\label{app:repro-repo}
+
+\begin{itemize}
+  \item \texttt{scripts/generate\_analysis\_figures.py} -- reproduces the
+        foundation-stage analysis figures under
+        \texttt{docs/analysis/figures/}.
+  \item \texttt{scripts/thesis\_figures.py} -- reproduces the thesis-specific
+        figures and tables under \texttt{docs/thesis/}.
+  \item \texttt{scripts/generate\_shortcut\_figures.py} -- reproduces the
+        padding and border-attention figures.
+  \item \texttt{scripts/generate\_shortcut\_figures\_nopad.py} -- the
+        no-pad variant.
+  \item \texttt{scripts/make\_paper\_figures.py} -- reproduces the paper
+        figures under \texttt{docs/latex/figures/}.
+\end{itemize}
+
+The full fine-tune, HPO, and ensemble procedures are launched through the
+internal training and evaluation entry points, whose YAML configurations are
+checked into the repository. The thesis does not re-execute those procedures;
+it consumes the artefacts they produced.
+
+\section{Artefact inventory}
+\label{app:repro-artifacts}
+
+\subsection*{Headline metrics}
+\path{results/finetune_zenodo/ensemble/top3_pre_hpo/external_validation/pcosgen.json}
+\path{results/finetune_zenodo/ensemble/top3_pre_hpo/calibration/calibration_results.json}
+
+\subsection*{Per-architecture fine-tune metrics}
+\path{results/finetune_zenodo/checkpoints/srad_nopad/densenet121/final_metrics.json}
+\path{results/finetune_zenodo/checkpoints/srad_nopad/convnext_tiny/final_metrics.json}
+\path{results/finetune_zenodo/checkpoints/gauss_nopad/vit_base/final_metrics.json}
+
+\subsection*{HPO best parameters}
+\path{results/finetune_hpo/srad_nopad_densenet121/densenet121/best_params.yaml}
+\path{results/finetune_hpo/srad_nopad_convnext_tiny/convnext_tiny/best_params.yaml}
+\path{results/finetune_hpo/gauss_nopad_vit_base/vit_base/best_params.yaml}
+
+\subsection*{MC-Dropout predictions}
+\path{results/finetune_zenodo/checkpoints/srad_nopad/densenet121/uncertainty/mc_dropout_predictions.csv}
+\path{results/finetune_zenodo/checkpoints/srad_nopad/convnext_tiny/uncertainty/mc_dropout_predictions.csv}
+\path{results/finetune_zenodo/checkpoints/gauss_nopad/vit_base/uncertainty/mc_dropout_predictions.csv}
+
+\subsection*{External validation predictions (per-checkpoint)}
+\path{results/finetune_zenodo/checkpoints/srad_nopad/densenet121/external_validation/pcosgen.csv}
+\path{results/finetune_zenodo/checkpoints/srad_nopad/convnext_tiny/external_validation/pcosgen.csv}
+\path{results/finetune_zenodo/checkpoints/gauss_nopad/vit_base/external_validation/pcosgen.csv}
+
+\subsection*{Sweep matrices}
+\path{results/ablation/sweep_matrix.csv}
+\path{results/ablation_nopad/sweep_matrix.csv}
+
+\section{Verifying headline numbers}
+\label{app:repro-verify}
+
+A reader can verify any headline number in this thesis by loading the
+corresponding JSON or CSV and checking it against the reported value. The
+script below reproduces every headline metric in
+\cref{tab:headline-numbers}:
+
+\begin{verbatim}
+import json
+ens = json.load(open(
+    "results/finetune_zenodo/ensemble/top3_pre_hpo/"
+    "external_validation/pcosgen.json"))
+cal = json.load(open(
+    "results/finetune_zenodo/ensemble/top3_pre_hpo/"
+    "calibration/calibration_results.json"))
+assert abs(ens["test_auc_roc"] - 0.9487) < 1e-4
+assert abs(ens["test_f1"] - 0.8665) < 1e-4
+assert abs(ens["test_mcc"] - 0.7884) < 1e-4
+assert abs(cal["ece_after_pass2"] - 0.0810) < 1e-4
+print("all headline metrics match")
+\end{verbatim}
+
+\section{Wall-clock note}
+\label{app:repro-wallclock}
+
+The wall-clock estimate is the sum of the time-stamped training logs in the
+sweep matrices, plus the HPO trials, the post-HPO retrain, the two-pass
+calibration, the MC-Dropout uncertainty evaluation, and the Grad-CAM panel
+generation. The reported 5--6 hours is conservative. A user with the same
+hardware could expect a similar total; a different GPU, batch size, or
+PyTorch version would change it.
+
+\end{document}

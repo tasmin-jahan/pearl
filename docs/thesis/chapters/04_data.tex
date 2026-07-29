@@ -1,0 +1,107 @@
+% =====================================================================
+% Chapter 4 -- Dataset and Splits
+% =====================================================================
+\documentclass[../preamble.tex]{subfiles}
+\begin{document}
+
+\chapter{Dataset and Splits}
+\label{ch:data}
+
+\section{Source dataset: Figshare PCOS Ultrasound}
+\label{sec:data-figshare}
+
+The source-domain experiments use the public Figshare PCOS Ultrasound Dataset
+\cite{figshare:pcos}.
+The raw download contains more than 11{,}000 files arranged in infected and
+non-infected directories. A byte-level MD5 audit found substantial duplication:
+3{,}184 unique PCOS images among 6{,}784 infected files and 812 unique healthy
+images among 5{,}000 non-infected files. The resulting unique dataset contains
+3{,}996 images, with a PCOS-to-healthy ratio of $3.92{:}1$.
+
+Deduplication precedes all split operations. If identical files are allowed to
+cross a split boundary, a model can obtain an artificially high validation
+score without learning a transferable feature. Exact-byte MD5 hashing detects
+identical files; near duplicates arising from re-encoding or cropping are not
+claimed to be removed.
+
+\section{Target dataset: PCOSgen}
+\label{sec:data-pcosgen}
+
+The target-domain evaluation uses PCOSgen (Sundari et~al., 2025), with the
+public release containing 4{,}668 images: 3{,}627 PCOS and 1{,}041 healthy.
+The executed split contains a 3{,}200-image train pool and a separate
+1{,}468-image test set. The train pool was divided into 2{,}560 training
+images and 640 validation images. The held-out test set contains 549 PCOS
+images and 919 healthy images.
+
+The PCOSgen test set is not used for fine-tuning, HPO, epoch selection,
+calibration fitting, or threshold selection. The results in Chapters~\ref{ch:results}
+and~\ref{ch:discussion} therefore distinguish the fine-tuning pool from the
+held-out external test.
+
+\input{../tables/dataset_composition.tex}
+
+\section{Class imbalance}
+\label{sec:data-imbalance}
+
+Deduplication makes the source-domain class imbalance more visible because
+the non-PCOS class contains more repeated files. The training loss uses
+inverse-frequency weights:
+\begin{equation}
+  w_c = \frac{n_{\mathrm{total}}}{2n_c},
+  \label{eq:class-weight}
+\end{equation}
+where $n_c$ is the number of examples in class $c$. A weighted sampler is
+available as a separate data-level option; it is not silently combined with
+loss weighting in the reported results unless explicitly selected in the
+configuration. The target train pool is also imbalanced in the opposite
+numerical direction: 362 PCOS versus 2{,}838 healthy images, approximately
+$0.13{:}1$ PCOS-to-healthy. The held-out test set is less extreme at
+$1{:}1.67$ PCOS-to-healthy.
+
+\section{Split procedure}
+\label{sec:data-split}
+
+For the deduplicated Figshare data, the intended split is stratified 80/10/10:
+10\% is first reserved for testing, then 10/90 of the remainder is reserved
+for validation. The two-stage split preserves class proportions while leaving
+approximately four hundred images in each evaluation partition.
+
+Medical images can also leak patient identity if several frames from one
+patient are distributed across partitions. The splitter therefore exposes a
+group-aware fallback. When a patient key can be inferred and the number of
+unique groups is smaller than the number of images, groups rather than images
+are split. The Figshare implementation uses filename stems as a proxy when
+metadata are absent. PCOSgen's released structure does not provide a verified
+patient-level key, so this thesis does not claim patient-level separation for
+that cohort; this is a limitation, not a result.
+
+\section{Dataset routing}
+\label{sec:data-routing}
+
+The executed routing is:
+\begin{enumerate}
+  \item use Figshare to train the foundation models and assess source-domain
+        performance;
+  \item score foundation checkpoints zero-shot on the full PCOSgen corpus to
+        expose domain shift;
+  \item use only the PCOSgen train pool for adaptation and retain its 1{,}468
+        test images as the final held-out evaluation;
+  \item use the held-out predictions for final external metrics, confusion
+        matrices, ROC/PR curves, and uncertainty summaries.
+\end{enumerate}
+
+This routing is why the zero-shot confusion matrix has $n=4{,}668$ while the
+fine-tuned and ensemble confusion matrices have $n=1{,}468$. Those raw counts
+must not be compared as if they came from the same population.
+
+\section{Data limitations}
+\label{sec:data-limitations}
+
+The public datasets do not expose a complete demographic, acquisition-device,
+or patient-identity metadata table. As a result, the thesis can measure
+cross-dataset shift but cannot perform a meaningful subgroup fairness analysis
+or guarantee patient-level independence in PCOSgen. Prospective multi-centre
+data with verified patient IDs is required for clinical validation.
+
+\end{document}

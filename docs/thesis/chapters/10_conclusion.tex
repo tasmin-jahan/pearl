@@ -1,0 +1,90 @@
+% =====================================================================
+% Chapter 10 -- Conclusion and Future Work
+% =====================================================================
+\documentclass[../preamble.tex]{subfiles}
+\begin{document}
+
+\chapter{Conclusion and Future Work}
+\label{ch:conclusion}
+
+\section{Recap of contributions}
+\label{sec:conclusion-recap}
+
+This thesis built and evaluated \PEARL{}, a trust-oriented deep-learning
+pipeline for PCOS detection from ovarian ultrasound images. The work
+contributes:
+
+\begin{enumerate}
+  \item a reproducible pipeline that separates deduplication, split
+        construction, preprocessing, training, fine-tuning, calibration,
+        uncertainty estimation, and explanation;
+  \item a controlled SRAD-versus-Gaussian comparison on nine backbones;
+  \item a documented letterbox-padding ablation that quantifies a
+        cross-dataset shortcut;
+  \item a probability-averaged three-architecture ensemble that combines
+        DenseNet-121, ConvNeXt-Tiny, and ViT-B/16 for a final external AUC
+        of 0.9487 (95\% CI 0.9368--0.9596) on the held-out PCOSgen test set;
+  \item two-pass temperature scaling that reduces ensemble Expected
+        Calibration Error from 0.0854 to 0.0810;
+  \item MC-Dropout predictive-entropy summaries that expose confident and
+        uncertain predictions separately; and
+  \item Grad-CAM inspection that links the model's attention to anatomical
+        regions and to failure modes.
+\end{enumerate}
+
+The thesis also documents the difference between the v3 pipeline
+specification and the executed final run, so future work can reproduce or
+extend the missing components.
+
+\section{Future work}
+\label{sec:conclusion-future}
+
+\begin{itemize}
+  \item \textbf{Prospective validation.} The most important extension is a
+        prospective evaluation at one or more clinical sites with verified
+        patient-level grouping, acquisition metadata, and histopathological
+        ground truth. The current 0.9487 external AUC is informative but does
+        not establish a clinical performance claim.
+  \item \textbf{Larger HPO cohorts.} A larger or nested validation set, or
+        repeated cross-validation, would stabilise the HPO step. The
+        pre-HPO recommendation in this thesis reflects the small validation
+        set rather than a permanent choice.
+  \item \textbf{Multi-modal fusion.} The pipeline currently uses images only.
+        Combining the ultrasound with hormonal and clinical variables would
+        move closer to a clinically useful diagnostic workflow, as suggested
+        by the cross-attention approach of Lakshmi and Pushpa
+        \cite{lakshmi2026}.
+  \item \textbf{Federated learning.} A federated training scheme across
+        hospitals could address privacy concerns that limit centralised data
+        collection. Such a scheme would also enable a much larger
+        evaluation cohort.
+  \item \textbf{Richer explainability.} LRP, SHAP, and objective
+        perturbation-based evaluation were specified in the methodology
+        document but not executed \cite{samek2017,patil2025}. Adding them
+        and running reader studies would establish whether Grad-CAM, LRP,
+        and SHAP produce explanations that clinicians actually trust.
+  \item \textbf{Distribution-shift robustness.} The thesis shows that simple
+        preprocessing shortcuts produce large domain gaps. Robustness
+        techniques such as test-time adaptation, source-free domain
+        adaptation, or learned augmentations could close the gap more
+        systematically.
+  \item \textbf{Class conditioning on the deployment cohort.} The
+        sensitivity-targeted operating point is calibrated on the PCOSgen
+        test set. Different deployment populations will need different
+        thresholds. A deployment-time threshold routine would let a
+        hospital tune the operating point to its own prevalence and referral
+        cost structure.
+\end{itemize}
+
+\section{Closing remark}
+\label{sec:conclusion-closing}
+
+Trust-oriented deep learning for medical imaging is not simply a matter of
+reported accuracy. It requires reporting what the model does on a different
+cohort, what the model believes about its own confidence, and which image
+regions drove the decision. The present pipeline goes some way toward each
+of those, but the appendices also make clear how much remains. Future work
+should treat those gaps as a research agenda rather than as silent
+limitations.
+
+\end{document}

@@ -1,0 +1,106 @@
+% =====================================================================
+% Appendix C -- Scope Evolution Timeline
+% =====================================================================
+\documentclass[../preamble.tex]{subfiles}
+\begin{document}
+
+\chapter{Scope Evolution Timeline}
+\label{app:scope-evolution}
+
+The thesis reports a narrower experimental scope than the original FYDP
+proposal. The deviation is recorded explicitly here so that future readers
+can interpret the methodology and results chapters accurately.
+
+\section{Proposal-to-execution timeline}
+\label{app:scope-timeline}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Evolution from the original FYDP proposal to the executed pipeline.
+           ``Executed reality'' refers to the artefacts under
+           \texttt{results/} and the figures produced by the scripts under
+           \texttt{scripts/}.}
+  \label{tab:scope-evolution}
+  \begin{tabularx}{\linewidth}{@{}lXX@{}}
+    \toprule
+    \textbf{Item} & \textbf{Proposal claim} & \textbf{Executed reality} \\
+    \midrule
+    Preprocessing grid & nine backbones $\times$ six conditions
+                       & nine backbones $\times$ two conditions (SRAD vs.\ Gaussian), with CLAHE fixed \\
+    Datasets          & Figshare only
+                       & Figshare + external PCOSgen (Sundari et~al., 2025) \\
+    XAI methods       & Grad-CAM, LRP, SHAP
+                       & Grad-CAM only \\
+    Uncertainty       & MC-Dropout + uncertainty-gated referral
+                       & MC-Dropout entropy + per-coverage statistics; referral remains a design concept \\
+    Cross-validation  & 10-fold patient-level CV
+                       & Single stratified 80/10/10 split on Figshare, single 2{,}560/640 split on PCOSgen train pool, separate held-out test \\
+    Calibration       & ECE + temperature scaling
+                       & Two-pass temperature scaling per-model and on the ensemble probability \\
+    Architecture roster & ResNet, DenseNet, EfficientNet, InceptionV3 (4 families)
+                       & ResNet, DenseNet, EfficientNet, ConvNeXt, MobileNetV3, ViT, Swin (7 families) \\
+    Ensemble          & K-fold top-k finalist ensemble
+                       & Pre-HPO probability-averaged 3-model ensemble (top-3 fine-tuned checkpoints) \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Why the scope changed}
+\label{app:scope-why}
+
+\subsection*{Preprocessing grid}
+
+A nine-by-six grid would have required 54 foundation-stage runs, which would
+have exceeded the available compute budget for a single project cycle.
+Reducing the grid to two conditions isolates the denoiser as the variable
+of interest and produces a directly interpretable comparison.
+
+\subsection*{External dataset}
+
+The original proposal stated Figshare only. PCOSgen became publicly available
+in 2025 and its release was treated as an opportunity to evaluate
+cross-dataset generalisation, which is a stronger test than a single
+in-domain split. The added value of an external cohort outweighed the cost
+of re-routing the fine-tune stage.
+
+\subsection*{XAI methods}
+
+The original brief listed three XAI methods. Running all three on every
+fine-tuned checkpoint would have required substantial engineering effort for
+each method, especially LRP under timm backbones. Grad-CAM was prioritised
+because it integrates with the existing forward pass and because it was
+sufficient to expose the padding shortcut. LRP and SHAP remain in the
+designed-but-not-executed appendix.
+
+\subsection*{Uncertainty-gated referral}
+
+The brief proposed a deployed referral mechanism with a fixed entropy
+cutoff. This thesis implements the per-coverage statistics from which a
+deployment could set the cutoff, but does not deploy the mechanism. A
+clinical deployment would require a defined referral cost, a target
+coverage, and prospective validation, none of which are within scope.
+
+\subsection*{Cross-validation}
+
+A 10-fold cross-validation over the combined Figshare and PCOSgen corpus
+would require a patient-level grouping that PCOSgen does not document. The
+thesis therefore uses a single held-out test set with bootstrap confidence
+intervals, and recommends nested cross-validation as future work.
+
+\subsection*{Architecture roster}
+
+InceptionV3 was removed because the contemporary transformer (ViT) and
+mobile (MobileNetV3) families added complementary inductive biases that
+InceptionV3 did not. Swin-Tiny was added to balance the parameter-count
+envelope against ViT-Base/16.
+
+\subsection*{Ensemble construction}
+
+A $k$-fold top-k finalist ensemble is a more principled construction, but
+the small PCOSgen validation set limits how much $k$-fold gains. The
+pre-HPO probability-averaged ensemble is reported instead, with the
+post-HPO retrain comparison included to show why the pre-HPO choice is
+preferred.
+
+\end{document}

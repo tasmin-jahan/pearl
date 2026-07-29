@@ -1,0 +1,21 @@
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Architecture roster. The \texttt{freeze\_fraction} column records the value used in the executed top-3 fine-tune; Optuna selected \texttt{freeze\_fraction=0} for all three members (see~\cref{tab:hpo-best}).}
+  \label{tab:model-roster}
+  \begin{tabular}{llrrl}
+    \toprule
+    \textbf{Name} & \textbf{timm key} & \textbf{Params (M)} & \textbf{Trainable (M)} & \textbf{Freeze frac.} \\
+    \midrule
+    ResNet-50 & \texttt{resnet50} & 25.6 & 25.6 & 0 \\
+    ResNet-101 & \texttt{resnet101} & 44.5 & 44.5 & 0 \\
+    DenseNet-121 & \texttt{densenet121} & 8.1 & 8.1 & 0 \\
+    DenseNet-169 & \texttt{densenet169} & 14.1 & 14.1 & 0 \\
+    EfficientNet-B0 & \texttt{tf\_efficientnet\_b0} & 5.3 & 5.3 & 0 \\
+    ConvNeXt-Tiny & \texttt{convnext\_tiny} & 28.6 & 28.6 & 0 \\
+    MobileNetV3-Large & \texttt{mobilenetv3\_large\_100} & 5.4 & 5.4 & 0 \\
+    ViT-Base/16 & \texttt{vit\_base\_patch16\_224} & 86.6 & 86.6 & 0 \\
+    Swin-Tiny & \texttt{swin\_tiny\_patch4\_window7\_224} & 28.3 & 28.3 & 0 \\
+    \bottomrule
+  \end{tabular}
+\end{table}

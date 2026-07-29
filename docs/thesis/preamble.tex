@@ -1,0 +1,110 @@
+% =====================================================================
+% PEARL Thesis -- Shared Preamble
+% =====================================================================
+% Loaded by both master thesis.tex and individual chapter .tex files
+% (via the subfiles package). Contains all package configuration and
+% custom commands.
+% =====================================================================
+
+% --- Encoding & fonts ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+% --- Page geometry ---
+\usepackage[a4paper,margin=1in]{geometry}
+
+% --- Math & typography ---
+\usepackage{amsmath,amssymb}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{tabularx}
+\usepackage{array}
+
+% --- Figures & tables ---
+\usepackage{graphicx}
+\usepackage{caption}
+\captionsetup{font=small,labelfont=bf,labelsep=period,tableposition=top}
+\usepackage{subcaption}
+
+% --- Bibliography & citations ---
+% biblatex + biber. The master prints the complete bibliography. Individual
+% chapters compile standalone for text/figures; README explains the bib step.
+\usepackage[backend=biber,style=numeric,sorting=none,giveninits=true,uniquename=false]{biblatex}
+\addbibresource{refs/thesis.bib}
+
+% --- Subfiles (per-chapter independent compile) ---
+\usepackage{subfiles}
+
+% --- Units ---
+\usepackage{siunitx}
+\sisetup{detect-all=true,round-mode=places,round-precision=4}
+
+% --- Cross-references ---
+\usepackage[hidelinks]{hyperref}
+\usepackage{cleveref}
+
+% --- Algorithms ---
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+% --- Diagrams ---
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,shapes,fit,calc}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+% --- Colours ---
+\usepackage{xcolor}
+
+% --- Cross-reference names ---
+\Crefname{figure}{Figure}{Figures}
+\Crefname{table}{Table}{Tables}
+\Crefname{algorithm}{Algorithm}{Algorithms}
+
+% --- Custom commands ---
+\newcommand{\figref}[1]{\cref{#1}}
+\newcommand{\tabref}[1]{\cref{#1}}
+\newcommand{\algref}[1]{\cref{#1}}
+\newcommand{\secref}[1]{\cref{#1}}
+
+% Common acronyms
+\newcommand{\PCOS}{PCOS}
+\newcommand{\PEARL}{PEARL}
+\newcommand{\SRAD}{SRAD}
+\newcommand{\ICOV}{ICOV}
+\newcommand{\CLAHE}{CLAHE}
+\newcommand{\ECE}{ECE}
+\newcommand{\MCC}{MCC}
+\newcommand{\AUC}{AUC}
+\newcommand{\AP}{AP}
+\newcommand{\GradCAM}{Grad-CAM}
+\newcommand{\HPO}{HPO}
+\newcommand{\MC}{MC}
+\newcommand{\SWA}{SWA}
+\newcommand{\EMA}{EMA}
+\newcommand{\BF}{bf16}
+\newcommand{\SOTA}{SOTA}
+\newcommand{\CIN}{CI}
+\newcommand{\PCOSgen}{\PCOS{}gen}
+
+% Reusable figure helper.
+\newcommand{\thesisfigure}[3][\linewidth]{%
+  \begin{figure}[htbp]
+    \centering
+    \includegraphics[width=#1]{figures/#2}%
+    \caption{#3}%
+  \end{figure}%
+}
+
+% Table helper columns
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcolumntype{R}{>{\raggedleft\arraybackslash}X}
+
+% Figure-path search. When a chapter is compiled directly via subfiles,
+% the path is relative to that chapter file (../figures).
+\graphicspath{{figures/}{../figures/}}
+
+% Do not add \begin{document} or \end{document} here: this file is a
+% shared preamble inserted by thesis.tex and by subfiles chapter files.

@@ -1,0 +1,15 @@
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Confusion-matrix counts per pipeline stage. Stages 1 and 2--3 are not directly comparable: Stage 1 was scored on the full PCOSgen corpus before the train/test split existed; Stages 2 and 3 share the held-out test set.}
+  \label{tab:stage-cm}
+  \begin{tabular}{lrrrrr}
+    \toprule
+    \textbf{Stage} & \textbf{TN} & \textbf{FP} & \textbf{FN} & \textbf{TP} & \textbf{$n$} \\
+    \midrule
+    1. Foundation (SRAD + ResNet-50) & 43 & 998 & 92 & 3535 & 4668 \\
+    2. Fine-tune (SRAD + DenseNet-121) & 678 & 241 & 5 & 544 & 1468 \\
+    3. Pre-HPO ensemble & 755 & 164 & 4 & 545 & 1468 \\
+    \bottomrule
+  \end{tabular}
+\end{table}

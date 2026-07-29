@@ -1,0 +1,123 @@
+% =====================================================================
+% Chapter 3 -- Methodology Overview
+% =====================================================================
+\documentclass[../preamble.tex]{subfiles}
+\begin{document}
+
+\chapter{Methodology Overview}
+\label{ch:method-overview}
+
+\section{Design intent}
+\label{sec:method-intent}
+
+The \PEARL{} pipeline was conceived as a sequence of seven phases that build
+on each other, where each phase produces an artefact that feeds the next.
+The pipeline is config-driven: every experimental variation is a YAML
+override. The phases are described in the chapters that follow; this chapter
+presents the data-flow structure that ties them together.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[
+      node distance=0.6cm and 0.8cm,
+      phase/.style={draw, rectangle, minimum height=0.9cm, minimum width=2.5cm, align=center, fill=blue!8},
+      arr/.style={-{Latex[length=2mm]}},
+    ]
+    \node[phase] (p1) {Phase 1\\Data ingest + dedup};
+    \node[phase, right=of p1] (p2) {Phase 2\\Split (80/10/10)};
+    \node[phase, right=of p2] (p3) {Phase 3\\Preprocessing\\(CLAHE + denoiser)};
+    \node[phase, right=of p3] (p4) {Phase 4\\Augment + train\\foundation};
+    \node[phase, right=of p4] (p5) {Phase 5\\HPO + retrain\\(top 3)};
+    \node[phase, below=of p2] (p6) {Phase 6\\Ensemble + calibration};
+    \node[phase, below=of p5] (p7) {Phase 7\\Uncertainty + XAI};
+    \draw[arr] (p1) -- (p2);
+    \draw[arr] (p2) -- (p3);
+    \draw[arr] (p3) -- (p4);
+    \draw[arr] (p4) -- (p5);
+    \draw[arr] (p5) -- (p6);
+    \draw[arr] (p5) -- (p7);
+    \draw[arr, dashed] (p6) -- (p7);
+  \end{tikzpicture}
+  \caption{Data-flow overview of the seven pipeline phases. Phase 6 (calibration)
+           and Phase 7 (uncertainty and explanation) operate on the same
+           checkpoints produced by Phases 4--5.}
+  \label{fig:pipeline-overview}
+\end{figure}
+
+\section{Three training stages}
+\label{sec:method-stages}
+
+The thesis distinguishes three training stages that appear repeatedly in the
+later chapters:
+
+\begin{enumerate}
+  \item \textbf{Foundation stage.} Each of nine backbones is fine-tuned on the
+        Figshare training split under a fixed preprocessing pipeline. The
+        result is eighteen foundation checkpoints (nine architectures $\times$
+        two denoisers). Foundation checkpoints are evaluated on the Figshare
+        held-out test set and, zero-shot, on the full PCOSgen corpus.
+  \item \textbf{Fine-tune stage.} A subset of the strongest foundation
+        checkpoints is fine-tuned on the PCOSgen training pool, with the
+        held-out PCOSgen test set reserved for external evaluation.
+  \item \textbf{Ensemble stage.} The three highest-AUC fine-tuned checkpoints
+        are combined through probability averaging and then recalibrated by
+        two-pass temperature scaling.
+\end{enumerate}
+
+The three stages map onto the three-panel confusion-matrix figure shown in
+\cref{fig:confusion-stages} in the Results chapter.
+
+\section{Inputs and outputs per stage}
+\label{sec:method-io}
+
+Each stage consumes the previous stage's artefact and produces a new
+artefact:
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Inputs and outputs of each training stage.}
+  \label{tab:method-io}
+  \begin{tabular}{lll}
+    \toprule
+    \textbf{Stage} & \textbf{Inputs} & \textbf{Outputs} \\
+    \midrule
+    Foundation & Figshare split + preprocessing & 18 checkpoints + sweep matrix \\
+    Fine-tune & Foundation checkpoints + PCOSgen train pool & 18 fine-tuned checkpoints + per-arch metrics \\
+    Ensemble & Top-3 fine-tuned checkpoints & probability file, calibration artefacts \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Role of the design versus executed experiment}
+\label{sec:method-design-vs-run}
+
+The v3 methodology specification described several features that are not
+present in the executed final run. The most important deviations are:
+
+\begin{itemize}
+  \item \textbf{Backbone freezing.} The methodology spec fixed a default
+        \texttt{freeze\_fraction=0.60}, with HPO over $\{0.40, 0.50, 0.60,
+        0.70\}$. The executed top-3 fine-tunes all selected
+        \texttt{freeze\_fraction=0} after Optuna search.
+  \item \textbf{SWA, EMA, k-fold CV.} The methodology spec describes SWA,
+        EMA, and per-architecture $k$-fold cross-validation. These were
+        implemented in the trainer scaffold but were not used to produce the
+        reported results, which are based on single-split fine-tunes.
+  \item \textbf{XAI methods.} The proposal listed Grad-CAM, LRP, and SHAP.
+        Only Grad-CAM was executed on the fine-tuned checkpoints.
+\end{itemize}
+
+These deviations are stated up front here so the reader can interpret the
+remaining chapters accurately. The full intended-versus-executed table is in
+\cref{app:intended-executed}.
+
+\section{Reproducibility posture}
+\label{sec:method-repro}
+
+Every result reported in this thesis is reproducible from the artefacts in
+the repository. The reproducibility recipe, including package versions,
+hardware, wall-clock estimates, and command-line invocations, is collected
+in \cref{app:reproducibility}.
+
+\end{document}

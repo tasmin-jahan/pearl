@@ -1,0 +1,15 @@
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Optuna best hyperparameters for the three ensemble members. All three selected \texttt{freeze\_fraction=0} (full backbone fine-tuning).}
+  \label{tab:hpo-best}
+  \begin{tabular}{lcccccc}
+    \toprule
+    \textbf{Architecture} & \textbf{LR} & \textbf{WD} & \textbf{Dropout} & \textbf{Rot.} & \textbf{LS} & \textbf{Batch} \\
+    \midrule
+    DenseNet-121 (srad) & 1.00e-05 & 1.08e-03 & 0.00 & 0 & 0.013 & 16 \\
+    ConvNeXt-Tiny (srad) & 6.62e-06 & 1.19e-03 & 0.31 & 13 & 0.030 & 32 \\
+    ViT-B/16 (gauss) & 5.37e-05 & 1.88e-03 & 0.24 & 0 & 0.092 & 64 \\
+    \bottomrule
+  \end{tabular}
+\end{table}

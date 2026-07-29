@@ -1,0 +1,72 @@
+% =====================================================================
+% Appendix B -- HPO Search Space
+% =====================================================================
+\documentclass[../preamble.tex]{subfiles}
+\begin{document}
+
+\chapter{Hyperparameter Optimisation Search Space}
+\label{app:hpo-search-space}
+
+\section{Framework}
+\label{app:hpo-framework}
+
+Optuna was used with the Tree-structured Parzen Estimator (TPE) sampler and
+the MedianPruner \cite{akiba2019}. Trials were pruned at epoch 4 if the
+validation AUC was below the median of completed trials.
+
+\section{Search space}
+\label{app:hpo-space}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Optuna search space used for the fine-tune stage. Each trial ran
+           for 8 epochs with the MedianPruner firing at epoch 4. Twenty trials
+           per architecture.}
+  \label{tab:hpo-space}
+  \begin{tabular}{ll}
+    \toprule
+    \textbf{Parameter} & \textbf{Distribution} \\
+    \midrule
+    Learning rate      & log-uniform on $[5 \times 10^{-6},\, 1 \times 10^{-4}]$ \\
+    Weight decay       & log-uniform on $[1 \times 10^{-5},\, 1 \times 10^{-2}]$ \\
+    Dropout            & uniform on $[0,\, 0.5]$ \\
+    Rotation (deg.)    & integer in $\{0,\, 1,\, 2,\, \dots,\, 20\}$ \\
+    Label smoothing    & uniform on $[0,\, 0.1]$ \\
+    Freeze fraction    & categorical in $\{0,\, 0.5\}$ \\
+    Batch size         & categorical in $\{16,\, 32,\, 64\}$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Best parameters per ensemble member}
+\label{app:hpo-best}
+
+\input{../tables/hpo_best.tex}
+
+\section{Trial counts}
+\label{app:hpo-trial-counts}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Number of Optuna trials per ensemble member. Trials are pruned at
+           epoch 4 if performance is below the median of completed trials.}
+  \label{tab:hpo-trials}
+  \begin{tabular}{lrrr}
+    \toprule
+    \textbf{Architecture} & \textbf{Trials} & \textbf{Completed} & \textbf{Pruned} \\
+    \midrule
+    DenseNet-121   & 20 & 14 & 6 \\
+    ConvNeXt-Tiny  & 20 & 12 & 8 \\
+    ViT-B/16       & 20 & 16 & 4 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The actual numbers above are derived from the \texttt{summary.json} files in
+\texttt{results/finetune\_hpo/}. The numbers in the original v3 methodology
+specification (20 completed trials per architecture, with no pruning)
+differ from the executed run, in which the pruner did fire on some trials.
+
+\end{document}
