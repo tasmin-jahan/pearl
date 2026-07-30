@@ -188,24 +188,41 @@ print("✓ fig4_external_mcc.png")
 # =====================================================================
 # Figure 5: Internal vs external AUC — paired drop
 # =====================================================================
-fig, ax = plt.subplots(figsize=(10, 5))
+fig, ax = plt.subplots(figsize=(11, 5.5))
 x = np.arange(len(ARCHES))
-width = 0.27
+width = 0.22
+group_gap = 0.02  # visible separation between SRAD and Gauss internal bars
 for i, prep in enumerate(PREPS):
     int_vals = [get(internal, prep, a, "test_auc_roc", np.nan) for a in ARCHES]
     ext_vals = [get(with_preproc, prep, a, "test_auc_roc", np.nan) for a in ARCHES]
     color = "#d77a61" if prep == "srad" else "#5b8fb8"
-    ax.bar(x + (i - 0.5) * width, int_vals, width, label=f"{PREP_LABEL[prep]} — internal",
-           color=color, edgecolor="black", linewidth=0.4, alpha=0.95)
-    ax.bar(x + (i - 0.5) * width + 0.005, ext_vals, width, label=f"{PREP_LABEL[prep]} — external",
-           color=color, edgecolor="black", linewidth=0.4, alpha=0.35, hatch="//")
+    int_bars = ax.bar(x + (i - 0.5) * width, int_vals, width,
+                      label=f"{PREP_LABEL[prep]} — internal",
+                      color=color, edgecolor="black", linewidth=0.4, alpha=0.95)
+    ext_bars = ax.bar(x + (i - 0.5) * width + 0.005, ext_vals, width,
+                      label=f"{PREP_LABEL[prep]} — external",
+                      color=color, edgecolor="black", linewidth=0.4, alpha=0.35, hatch="//")
+    # Internal AUC labels — placed above the bar with enough room to clear y=1.0.
+    # SRAD and Gauss bars are narrow but adjacent; offset labels horizontally so they don't overlap.
+    h_offset = (-0.02 if prep == "srad" else 0.02)
+    for bar, val in zip(int_bars, int_vals):
+        if not np.isnan(val):
+            ax.text(bar.get_x() + bar.get_width() / 2 + h_offset, val + 0.004,
+                    f"{val:.4f}", ha="center", va="bottom", fontsize=6, color="#333333")
+    # External AUC labels — well below 1.0, normal offset is safe
+    for bar, val in zip(ext_bars, ext_vals):
+        if not np.isnan(val):
+            ax.text(bar.get_x() + bar.get_width() / 2, val + 0.015,
+                    f"{val:.2f}", ha="center", va="bottom", fontsize=7, color="black")
 ax.set_xticks(x)
 ax.set_xticklabels([ARCH_LABEL[a] for a in ARCHES], rotation=25, ha="right")
 ax.set_ylabel("AUC")
-ax.set_ylim(0.3, 1.02)
+ax.set_ylim(0.3, 1.06)
 ax.axhline(0.5, color="grey", linestyle="--", alpha=0.5, label="random AUC")
-ax.set_title("Internal vs external AUC: 0.999 → 0.45–0.59 for every (prep × arch)")
-ax.legend(frameon=False, fontsize=8, ncol=2, loc="upper right")
+ax.set_title("Internal vs external AUC: 0.999 → 0.45–0.59 for every (prep × arch)",
+             pad=12)
+ax.legend(frameon=False, fontsize=8, ncol=4, loc="upper center",
+          bbox_to_anchor=(0.5, -0.18))
 ax.grid(axis="y", alpha=0.3)
 fig.tight_layout()
 fig.savefig(os.path.join(FIG_DIR, "fig5_internal_vs_external_paired.png"), dpi=200, bbox_inches="tight")
