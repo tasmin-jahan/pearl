@@ -84,7 +84,7 @@ def main():
         task = progress.add_task("starting…", total=len(pending))
         for prep, arch, run_dir, ckpt in pending:
             cmd = [
-                sys.executable, "scripts/eval_external_noproc.py",
+                sys.executable, "scripts/evaluation/eval_external_noproc.py",
                 "--run_dir", run_dir,
                 "--model", f"configs/model/{arch}.yaml",
                 "--checkpoint", ckpt,

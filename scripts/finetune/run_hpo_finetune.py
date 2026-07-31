@@ -25,7 +25,7 @@ from typing import Dict, List, Tuple
 
 import yaml
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 VENV_PY = os.path.join(ROOT, ".venv", "bin", "python")
 
 

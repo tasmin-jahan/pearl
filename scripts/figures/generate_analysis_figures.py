@@ -586,11 +586,10 @@ for row, col, fname, label in ax_layout:
         img = load_preproc_for_display(f"results/probe_preproc/proc_gauss/{base}.npy")
     elif "No preproc" in label:
         # No preproc isn't a single file from that dir — reapply from raw
-        import cv2, sys
+        import cv2
         raw = cv2.imread(f"results/probe_preproc/raw_side_by_side/{fname}")
         if raw is not None:
-            sys.path.insert(0, "scripts")
-            from eval_external_noproc import noproc_apply
+            from src.preprocessing.preprocess import noproc_apply
             np_img = noproc_apply(raw, 224)  # HWC float32 in [-1, +3]
             lo, hi = np.percentile(np_img, [1, 99])
             img = np.clip((np_img - lo) / max(hi - lo, 1e-6), 0, 1)

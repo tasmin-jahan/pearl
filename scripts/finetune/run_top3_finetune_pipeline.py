@@ -18,7 +18,7 @@ import os
 import subprocess
 import sys
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
 
 def _run(cmd, cwd=ROOT, check=True):

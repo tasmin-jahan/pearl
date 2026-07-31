@@ -22,7 +22,7 @@ import sys
 
 import pandas as pd
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
 
 def _find_finetune_dirs(root: str):

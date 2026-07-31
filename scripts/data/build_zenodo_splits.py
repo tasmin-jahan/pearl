@@ -20,7 +20,7 @@ import os
 import sys
 from datetime import datetime, timezone
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 from src.data.zenodo_dataset import discover_zenodo_pairs, stratified_split
 
 

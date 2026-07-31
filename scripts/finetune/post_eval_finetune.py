@@ -22,7 +22,7 @@ import subprocess
 import sys
 from typing import List
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
 
 def _run(cmd: List[str], cwd: str = ROOT, check: bool = True):
@@ -75,8 +75,9 @@ def main():
 
         if not args.skip_calibration:
             cmd = [
-                ".venv/bin/python", "scripts/run_calibration_zenodo.py",
+                ".venv/bin/python", "scripts/calibration/run_calibration.py",
                 "--run_dir", run_dir,
+                "--test_dir", "data_external/test",
             ]
             try:
                 _run(cmd)
@@ -85,8 +86,9 @@ def main():
 
         if not args.skip_uncertainty:
             cmd = [
-                ".venv/bin/python", "scripts/run_uncertainty_zenodo.py",
+                ".venv/bin/python", "scripts/uncertainty/run_uncertainty.py",
                 "--run_dir", run_dir,
+                "--test_dir", "data_external/test",
                 "--n_passes", str(args.n_passes),
             ]
             try:
@@ -96,8 +98,9 @@ def main():
 
         if not args.skip_xai:
             cmd = [
-                ".venv/bin/python", "scripts/run_xai_zenodo.py",
+                ".venv/bin/python", "scripts/xai/run_xai.py",
                 "--run_dir", run_dir,
+                "--test_dir", "data_external/test",
                 "--method", "gradcam",
             ]
             try:

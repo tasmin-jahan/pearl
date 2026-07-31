@@ -27,7 +27,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 from src.utils.config import load_config
 from src.utils.seed import set_seed
@@ -88,7 +88,9 @@ class _NoProcDataset(Dataset):
 
 
 # Reuse the discovery function from evaluate_external
-from scripts.evaluate_external import discover, INFECTED_NAMES, HEALTHY_NAMES, _label_from_dirname  # noqa: E402
+from scripts.evaluation.evaluate_external import (  # noqa: E402
+    discover, INFECTED_NAMES, HEALTHY_NAMES, _label_from_dirname,
+)
 
 
 def main():

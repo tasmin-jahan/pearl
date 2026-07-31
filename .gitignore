@@ -25,6 +25,7 @@ build/
 *.onnx
 *.pkl
 *.pickle
+data/
 
 # --- Images & Media ---
 *.jpg

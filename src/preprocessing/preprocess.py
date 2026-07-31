@@ -553,6 +553,40 @@ def _perona_malik_2d(
     return img
 
 
+def noproc_apply(img: np.ndarray, input_size: int) -> np.ndarray:
+    """Apply only resize (aspect-preserving letterbox) + ImageNet normalize.
+
+    No CLAHE, no SRAD, no anisotropic diffusion. This is the simplest
+    preprocessing a timm pretrained model would expect.
+
+    Args:
+        img: HxWxC uint8 image (BGR from cv2).
+        input_size: Target spatial size (e.g. 224).
+
+    Returns:
+        HxWxC float32 image normalized with ImageNet mean/std.
+    """
+    h, w = img.shape[:2]
+    scale = input_size / max(h, w)
+    new_h, new_w = int(round(h * scale)), int(round(w * scale))
+    resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    pad_h = input_size - new_h
+    pad_w = input_size - new_w
+    pad_top = pad_h // 2
+    pad_bottom = pad_h - pad_top
+    pad_left = pad_w // 2
+    pad_right = pad_w - pad_left
+    padded = cv2.copyMakeBorder(
+        resized, pad_top, pad_bottom, pad_left, pad_right,
+        borderType=cv2.BORDER_CONSTANT, value=(0, 0, 0),
+    )
+    rgb = cv2.cvtColor(padded, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+    mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+    std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+    normalized = (rgb - mean) / std
+    return normalized.astype(np.float32)
+
+
 # ------------------------------------------------------------------
 # SRAD: Speckle-Reducing Anisotropic Diffusion (Yu & Acton, 2002)
 # ------------------------------------------------------------------
