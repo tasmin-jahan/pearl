@@ -65,7 +65,7 @@ def main():
         # 2. Evaluate
         if not args.skip_eval:
             model_cfg = f"configs/model/{arch}.yaml"
-            preproc_cfg = f"configs/preprocessing/{prep}.yaml"
+            preproc_cfg = "configs/preprocessing.yaml"
             ckpt = os.path.join(run_dir, "best.pt")
             cmd = [
                 ".venv/bin/python", "scripts/evaluate_external.py",

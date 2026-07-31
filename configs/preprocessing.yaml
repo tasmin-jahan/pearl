@@ -1,0 +1,73 @@
+# Single preprocessing config for the PEARL pipeline.
+#
+# Toggle flags to compose your preprocessing pipeline. Every step below
+# has an `enabled: true|false` toggle; parameters for each step live in
+# the same sub-dict and are only read when that step is enabled.
+#
+# Common recipes:
+#   SRAD denoising + letterbox padding:
+#     padding: reflect
+#     clahe.enabled: true
+#     srad.enabled: true
+#     gaussian.enabled: false
+#     zscore_normalize.enabled: true
+#     to_grayscale.enabled: false
+#
+#   Gaussian denoising + no padding (stretch-resize):
+#     padding: none
+#     clahe.enabled: true
+#     srad.enabled: false
+#     gaussian.enabled: true
+#     zscore_normalize.enabled: true
+#     to_grayscale.enabled: false
+#
+#   SRAD + no padding + greyscale:
+#     padding: none
+#     srad.enabled: true
+#     to_grayscale.enabled: true
+#
+# Output directory is computed by the preprocessing script from a
+# hash of the enabled steps, so each distinct combination lands in its
+# own subfolder of results/preprocessed/.
+
+name: default
+
+# Pipeline steps. Each `enabled` flag is the master switch for that step.
+steps:
+  resize: true                       # master switch for the resize step
+  padding: none                   # one of: reflect, constant, none
+  pad_value: 0                       # used when padding == constant
+  clahe:
+    enabled: true
+    clip_limit: 2.0
+    tile_size: [8, 8]
+  gaussian:
+    enabled: false
+    sigma: 1.0
+  srad:
+    enabled: true
+    iterations: 20
+    kappa: 30
+    gamma: 0.1
+  to_grayscale:
+    enabled: false
+    method: mean                     # 'mean' or 'luminance' (BT.601)
+    broadcast_3ch: true              # keep 3-channel shape for pretrained backbones
+  zscore_normalize:
+    enabled: true
+
+# Augmentation (applied at training time only — never at preprocess time).
+augmentation:
+  rotation: 15                       # ±degrees
+  horizontal_flip: true
+  scale: 0.1                         # ±fraction
+  jpeg_compression:
+    enabled: true
+    p: 0.3                           # probability per sample
+    q_low: 50
+    q_high: 95
+  light_blur:
+    enabled: true
+    p: 0.2
+    sigma_low: 0.1
+    sigma_high: 1.5

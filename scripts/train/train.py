@@ -5,10 +5,13 @@ CLI entrypoint for a single training run.
 Usage:
     python scripts/train.py \
         --model configs/model/swin_tiny.yaml \
-        --preprocessing configs/preprocessing/srad.yaml \
-        --experiment configs/experiment/best_model_xai.yaml \
+        --preprocessing configs/preprocessing.yaml \
+        --experiment configs/experiment/ablation_18.yaml \
         --set training.lr=5e-4 training.batch_size=16 \
         --run_dir results/ablation/checkpoints/srad/swin_tiny  # optional
+
+Preprocessing is now a single unified config (configs/preprocessing.yaml)
+with boolean toggles per stage.
 
 Dynamic overrides: ``--set <dotted.key.path>=<value>`` (repeatable).
 """

@@ -60,12 +60,11 @@ def main():
         out_csv = os.path.join(run_dir, "external_validation", "pcosgen.csv")
 
         model_cfg = os.path.join("configs", "model", f"{arch}.yaml")
-        preproc_cfg = os.path.join("configs", "preprocessing", f"{preproc}.yaml")
+        # Preprocessing is now the single unified config — every checkpoint
+        # uses the same preprocessing flags (configs/preprocessing.yaml).
+        preproc_cfg = "configs/preprocessing.yaml"
         if not os.path.isfile(model_cfg):
             print(f"[EvalFinetune] WARN: missing {model_cfg}; skipping")
-            continue
-        if not os.path.isfile(preproc_cfg):
-            print(f"[EvalFinetune] WARN: missing {preproc_cfg}; skipping")
             continue
 
         cmd = [

@@ -37,9 +37,8 @@ def main():
         "--architectures",
         nargs="+",
         default=[
-            "resnet50", "resnet101", "densenet121", "densenet169",
-            "efficientnet_b0", "convnext_tiny", "mobilenetv3_large",
-            "vit_base", "swin_tiny",
+            "swin_tiny", "vit_base", "convnext_tiny",
+            "densenet169", "efficientnet_b0",
         ],
     )
     ap.add_argument("--force", action="store_true")

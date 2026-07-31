@@ -5,8 +5,10 @@ CLI entrypoint for standalone evaluation of a trained model.
 Usage:
     python scripts/evaluate.py \
         --model configs/model/swin_tiny.yaml \
-        --preprocessing configs/preprocessing/srad.yaml \
-        --checkpoint results/checkpoints/srad/swin_tiny.pt
+        --preprocessing configs/preprocessing.yaml \
+        --checkpoint results/ablation/checkpoints/srad/swin_tiny/best.pt
+
+Preprocessing is now a single unified config (configs/preprocessing.yaml).
 """
 
 import argparse

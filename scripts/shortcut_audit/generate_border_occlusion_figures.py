@@ -12,9 +12,8 @@ import numpy as np
 OUT_DIR = "docs/analysis/figures"
 os.makedirs(OUT_DIR, exist_ok=True)
 
-ARCHES = ['resnet50', 'resnet101', 'densenet121', 'densenet169',
-          'efficientnet_b0', 'convnext_tiny', 'mobilenetv3_large',
-          'vit_base', 'swin_tiny']
+ARCHES = ['swin_tiny', 'vit_base', 'convnext_tiny',
+          'densenet169', 'efficientnet_b0']
 PREPS = ['srad', 'gauss']
 
 

@@ -28,7 +28,7 @@ import torch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from src.utils.config import load_config
+from src.utils.config import load_config, DEFAULT_PREPROCESSING_CONFIG
 from src.utils.seed import set_seed
 from src.utils.logging import ExperimentLogger, make_arch_dir
 from src.data.zenodo_dataset import build_zenodo_loader
@@ -135,7 +135,7 @@ def main():
     results_dir = exp_config.get("results_dir", "results/finetune_zenodo/")
 
     models = exp_config.get("models", [])
-    preprocessings = exp_config.get("preprocessing", [])
+    preprocessings = exp_config.get("preprocessing", ["default"])
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"[SweepFinetune] {len(models)} models × {len(preprocessings)} preprocessing = "
@@ -181,10 +181,11 @@ def main():
 
         for preproc_name in preprocessings:
             run_idx += 1
-            preproc_config_path = os.path.join(
-                "configs", "preprocessing", f"{preproc_name}.yaml",
-            )
-            preproc_config = load_config(preproc_config_path)
+            # Preprocessing is now controlled by the single unified config at
+            # configs/preprocessing.yaml — the same flags apply to every run.
+            # ``preproc_name`` is kept as a label for output paths and to
+            # locate the matching Figshare checkpoint under resume_root.
+            preproc_config = load_config(DEFAULT_PREPROCESSING_CONFIG)
 
             arch_dir = make_arch_dir(results_dir, preproc_name, model_name)
             ckpt_path = os.path.join(arch_dir, "best.pt")

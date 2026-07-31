@@ -40,9 +40,8 @@ def main():
         "--architectures",
         nargs="+",
         default=[
-            "resnet50", "resnet101", "densenet121", "densenet169",
-            "efficientnet_b0", "convnext_tiny", "mobilenetv3_large",
-            "vit_base", "swin_tiny",
+            "swin_tiny", "vit_base", "convnext_tiny",
+            "densenet169", "efficientnet_b0",
         ],
     )
     ap.add_argument("--force", action="store_true", help="Re-run even if outputs exist.")
@@ -92,7 +91,7 @@ def main():
                 sys.executable, "scripts/evaluate_external.py",
                 "--run_dir", run_dir,
                 "--model", f"configs/model/{arch}.yaml",
-                "--preprocessing", f"configs/preprocessing/{prep}.yaml",
+                "--preprocessing", "configs/preprocessing.yaml",
                 "--checkpoint", ckpt,
                 "--external_dir", args.external_dir,
                 "--layout", args.layout,

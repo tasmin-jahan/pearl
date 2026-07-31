@@ -23,7 +23,6 @@ def _make_config(jpeg=True, blur=True, jpeg_p=1.0, blur_p=1.0):
             "clahe": {"enabled": False},
             "gaussian": {"enabled": False},
             "srad": {"enabled": False},
-            "anisotropic_diffusion": {"enabled": False},
             "zscore_normalize": {"enabled": False},
             "padding": "reflect",
         },
@@ -159,7 +158,6 @@ def test_default_disabled_backward_compatibility():
             "clahe": {"enabled": False},
             "gaussian": {"enabled": False},
             "srad": {"enabled": False},
-            "anisotropic_diffusion": {"enabled": False},
         },
         "augmentation": {
             "rotation": 0,

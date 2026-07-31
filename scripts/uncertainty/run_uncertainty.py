@@ -7,7 +7,7 @@ Two modes:
 1. Figshare mode (legacy):
        python scripts/uncertainty/run_uncertainty.py \
            --model configs/model/swin_tiny.yaml \
-           --preprocessing configs/preprocessing/srad.yaml \
+           --preprocessing configs/preprocessing.yaml \
            --checkpoint results/checkpoints/srad/swin_tiny.pt \
            --mc_passes 50
 
@@ -16,6 +16,8 @@ Two modes:
            --run_dir results/finetune_zenodo/checkpoints/srad_nopad/densenet121 \
            --test_dir data_external/test \
            --n_passes 50
+
+Preprocessing is now the unified config (configs/preprocessing.yaml).
 
 This file replaces both `run_uncertainty.py` (original Figshare-only) and
 `run_uncertainty_zenodo.py` (Zenodo-only).

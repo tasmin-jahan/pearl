@@ -1054,7 +1054,7 @@ the entire analysis from the committed checkpoints and preprocessor outputs:
                 (writes hardlinks under
                 \texttt{data\_external/pcosgen/PCOSGen-train/\{train,test\}/\{infected,healthy\}/}).
           \item Build the no-pad .npy caches:
-                \texttt{python scripts/preprocess.py --config
+                \texttt{python scripts/preprocessing/preprocessing.py --config
                 configs/preprocessing/srad\_nopad.yaml --data\_dir data
                 --split\_seed 42}, and the same with
                 \texttt{gauss\_nopad.yaml}.

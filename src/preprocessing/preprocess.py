@@ -2,21 +2,20 @@
 Full preprocessing pipeline for PCOS ultrasound images.
 
 Applies a configurable sequence of:
-  letterbox-resize → CLAHE → Gaussian / Anisotropic Diffusion (or SRAD) → Z-score normalization
+  letterbox-resize → CLAHE → Gaussian / SRAD → Z-score normalization
 
 Resize is aspect-preserving by default: the longer side is scaled to
 ``input_size`` (224 for all current models) and the shorter side is
 letterboxed with reflected edge pixels. This preserves follicle shape
 geometry that would otherwise be distorted by naive stretching. Set
 ``steps.padding: "none"`` in the preprocessing YAML to revert to the
-legacy stretch behaviour (used by the v1/v2 ablation configs).
+legacy stretch behaviour.
 
-Two denoising options are supported for the diffusion step:
-  - "anisotropic_diffusion": generic Perona-Malik AD (driven by gradient magnitude,
-    assumes additive, signal-independent noise).
-  - "srad": Speckle-Reducing Anisotropic Diffusion (driven by local coefficient
-    of variation; correct for ultrasound's multiplicative, signal-dependent
-    speckle). This is the recommended denoiser for ultrasound.
+The only anisotropic-diffusion variant retained is SRAD
+(Speckle-Reducing Anisotropic Diffusion), driven by the local coefficient
+of variation. It is the right diffusion family for ultrasound's
+multiplicative, signal-dependent speckle and outperforms generic
+Perona-Malik on this dataset.
 
 Also handles data augmentation (rotation, flip, scale, JPEG-style compression,
 light blur) at training time. The JPEG-style and blur augmentations address
@@ -27,12 +26,6 @@ already-den-and-CLAHE-preprocessed signal.
 
 import cv2
 import numpy as np
-
-try:
-    from medpy.filter.smoothing import anisotropic_diffusion as medpy_ad
-    HAS_MEDPY = True
-except ImportError:
-    HAS_MEDPY = False
 
 
 class Preprocessor:
@@ -168,16 +161,11 @@ class Preprocessor:
         if gauss_cfg.get("enabled", False):
             image = self._apply_gaussian(image, gauss_cfg)
 
-        # Step 2b: Anisotropic Diffusion (generic Perona-Malik OR SRAD)
-        ad_cfg = self.steps.get("anisotropic_diffusion", {})
-        if ad_cfg.get("enabled", False):
-            method = ad_cfg.get("method", "srad")  # default to SRAD for ultrasound
-            if method == "srad":
-                image = self._apply_srad(image, ad_cfg)
-            else:
-                image = self._apply_anisotropic_diffusion(image, ad_cfg)
-
-        # Step 2c: SRAD-only legacy config (preferred entrypoint in v3)
+        # Step 2b: SRAD (Speckle-Reducing Anisotropic Diffusion).
+        # SRAD is the only anisotropic diffusion variant we keep — it is
+        # the right diffusion family for ultrasound's multiplicative
+        # speckle noise, and outperforms the generic Perona-Malik on
+        # this dataset.
         srad_cfg = self.steps.get("srad", {})
         if srad_cfg.get("enabled", False):
             image = self._apply_srad(image, srad_cfg)
@@ -248,48 +236,6 @@ class Preprocessor:
         # Kernel size derived from sigma: must be odd
         ksize = int(np.ceil(sigma * 6)) | 1  # ensure odd
         return cv2.GaussianBlur(image, (ksize, ksize), sigma)
-
-    @staticmethod
-    def _apply_anisotropic_diffusion(image: np.ndarray, cfg: dict) -> np.ndarray:
-        """Apply anisotropic diffusion (Perona-Malik).
-
-        Uses medpy if available, otherwise falls back to a manual implementation.
-
-        Args:
-            image: Input image (uint8 or float).
-            cfg: Config with iterations, kappa, gamma.
-
-        Returns:
-            Diffusion-filtered image.
-        """
-        niter = cfg.get("iterations", 20)
-        kappa = cfg.get("kappa", 30)
-        gamma = cfg.get("gamma", 0.1)
-
-        if HAS_MEDPY:
-            # medpy expects float input
-            img_float = image.astype(np.float64)
-            if len(img_float.shape) == 3:
-                # Apply per channel
-                channels = []
-                for c in range(img_float.shape[2]):
-                    filtered = medpy_ad(
-                        img_float[:, :, c],
-                        niter=niter,
-                        kappa=kappa,
-                        gamma=gamma,
-                        option=2,  # Perona-Malik option 2
-                    )
-                    channels.append(filtered)
-                result = np.stack(channels, axis=2)
-            else:
-                result = medpy_ad(
-                    img_float, niter=niter, kappa=kappa, gamma=gamma, option=2
-                )
-            return np.clip(result, 0, 255).astype(np.uint8)
-        else:
-            # Manual Perona-Malik implementation
-            return _perona_malik(image, niter, kappa, gamma)
 
     @staticmethod
     def _apply_srad(image: np.ndarray, cfg: dict) -> np.ndarray:
@@ -499,65 +445,11 @@ class Preprocessor:
         return cv2.GaussianBlur(image, (ksize, ksize), sigma)
 
 
-# ------------------------------------------------------------------
-# Fallback: manual Perona-Malik anisotropic diffusion
-# ------------------------------------------------------------------
-
-def _perona_malik(
-    image: np.ndarray, niter: int, kappa: float, gamma: float
-) -> np.ndarray:
-    """Manual Perona-Malik anisotropic diffusion.
-
-    Args:
-        image: Input image (uint8).
-        niter: Number of iterations.
-        kappa: Conduction coefficient (controls sensitivity to edges).
-        gamma: Integration constant (0 < gamma <= 0.25 for stability).
-
-    Returns:
-        Filtered image as uint8.
-    """
-    img = image.astype(np.float64)
-
-    if len(img.shape) == 3:
-        channels = []
-        for c in range(img.shape[2]):
-            channels.append(_perona_malik_2d(img[:, :, c], niter, kappa, gamma))
-        return np.clip(np.stack(channels, axis=2), 0, 255).astype(np.uint8)
-    else:
-        return np.clip(_perona_malik_2d(img, niter, kappa, gamma), 0, 255).astype(
-            np.uint8
-        )
-
-
-def _perona_malik_2d(
-    img: np.ndarray, niter: int, kappa: float, gamma: float
-) -> np.ndarray:
-    """2D Perona-Malik diffusion on a single-channel image."""
-    for _ in range(niter):
-        # Compute gradients in 4 directions
-        delta_n = np.roll(img, -1, axis=0) - img
-        delta_s = np.roll(img, 1, axis=0) - img
-        delta_e = np.roll(img, -1, axis=1) - img
-        delta_w = np.roll(img, 1, axis=1) - img
-
-        # Conduction coefficients (option 2: wide regions)
-        cn = np.exp(-(delta_n / kappa) ** 2)
-        cs = np.exp(-(delta_s / kappa) ** 2)
-        ce = np.exp(-(delta_e / kappa) ** 2)
-        cw = np.exp(-(delta_w / kappa) ** 2)
-
-        # Update
-        img = img + gamma * (cn * delta_n + cs * delta_s + ce * delta_e + cw * delta_w)
-
-    return img
-
-
 def noproc_apply(img: np.ndarray, input_size: int) -> np.ndarray:
     """Apply only resize (aspect-preserving letterbox) + ImageNet normalize.
 
-    No CLAHE, no SRAD, no anisotropic diffusion. This is the simplest
-    preprocessing a timm pretrained model would expect.
+    No CLAHE, no SRAD. This is the simplest preprocessing a timm
+    pretrained model would expect.
 
     Args:
         img: HxWxC uint8 image (BGR from cv2).

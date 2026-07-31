@@ -11,7 +11,7 @@ Usage:
                    results/finetune_zenodo/checkpoints/srad_nopad/efficientnet_b0 \
                    results/finetune_zenodo/checkpoints/gauss_nopad/resnet50 \
         --model configs/model/resnet50.yaml \
-        --preprocessing configs/preprocessing/srad_nopad.yaml \
+        --preprocessing configs/preprocessing.yaml \
         --out_dir results/finetune_zenodo/ensemble/top3_srad_gauss \
         --external_dir data_external/test
 
@@ -20,6 +20,8 @@ preprocessor to the test set as was used to train each member). The ensemble
 output is written to:
     <out_dir>/external_validation/pcosgen.json
     <out_dir>/external_validation/pcosgen.csv
+
+Preprocessing is now the unified config (configs/preprocessing.yaml).
 """
 import argparse
 import csv

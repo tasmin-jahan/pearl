@@ -12,12 +12,14 @@ Two modes:
        python scripts/calibration/run_calibration_ensemble.py \
            --model_configs configs/model/resnet50.yaml ... \
            --checkpoints results/checkpoints/srad/resnet50/best.pt ... \
-           --preprocessing configs/preprocessing/srad.yaml
+           --preprocessing configs/preprocessing.yaml
 
 2. Zenodo mode (--test_dir set, --run_dirs set):
        python scripts/calibration/run_calibration_ensemble.py \
            --run_dirs results/finetune_zenodo/checkpoints/<prep>/<arch>/... \
            --test_dir data_external/test
+
+Preprocessing is now the unified config (configs/preprocessing.yaml).
 
 This file replaces both `run_calibration_ensemble.py` (Figshare-only) and
 `run_calibration_zenodo_ensemble.py` (Zenodo-only).

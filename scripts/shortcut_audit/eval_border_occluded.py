@@ -27,9 +27,11 @@ Usage:
     python scripts/eval_border_occluded.py \\
         --run_dir results/ablation/checkpoints/srad/densenet121 \\
         --model configs/model/densenet121.yaml \\
-        --preprocessing configs/preprocessing/srad.yaml \\
+        --preprocessing configs/preprocessing.yaml \\
         --checkpoint results/ablation/checkpoints/srad/densenet121/best.pt \\
         --mode median
+
+Preprocessing is now the unified config (configs/preprocessing.yaml).
 """
 
 import argparse

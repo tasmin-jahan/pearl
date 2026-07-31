@@ -62,11 +62,10 @@ python scripts/smoke_test.py
 # 3. Deduplicate the raw dataset (the Figshare download ships with
 #    ~83% byte-duplicate noninfected and ~53% infected files — see
 #    notebooks/eda_figures and docs/methodology.tex). Reversible:
-python scripts/dedup_data.py --data_dir /path/to/data --mode report     # audit only
-python scripts/dedup_data.py --data_dir /path/to/data --mode quarantine # move to data/_duplicates/
+python scripts/preprocessing/dedup_split.py --all     # dedup + rename + stratified split
 
 # 4. Preprocess once
-python scripts/preprocess.py \
+python scripts/preprocessing/preprocessing.py \
     --config configs/preprocessing/srad.yaml \
     --data_dir /path/to/data
 

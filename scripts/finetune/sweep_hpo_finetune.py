@@ -25,7 +25,7 @@ import yaml
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from src.utils.config import load_config
+from src.utils.config import load_config, DEFAULT_PREPROCESSING_CONFIG
 from src.utils.seed import set_seed
 from src.model.builder import build_model
 from src.training.losses import build_weighted_loss
@@ -60,7 +60,7 @@ def main():
     preproc_name = exp_config["preprocessing"]
 
     model_config = load_config(f"configs/model/{model_name}.yaml")
-    preproc_config = load_config(f"configs/preprocessing/{preproc_name}.yaml")
+    preproc_config = load_config(DEFAULT_PREPROCESSING_CONFIG)
     search_space = exp_config.get("search_space", {})
     training_defaults = exp_config.get("training", {})
 

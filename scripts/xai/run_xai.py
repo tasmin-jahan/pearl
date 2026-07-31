@@ -9,7 +9,7 @@ Two modes:
 1. Figshare mode:
        python scripts/xai/run_xai.py \
            --model configs/model/swin_tiny.yaml \
-           --preprocessing configs/preprocessing/srad.yaml \
+           --preprocessing configs/preprocessing.yaml \
            --checkpoint results/checkpoints/srad/swin_tiny.pt \
            --methods gradcam lrp shap --n_samples 20
 
@@ -18,6 +18,8 @@ Two modes:
            --run_dir results/finetune_zenodo/checkpoints/srad_nopad/densenet121 \
            --test_dir data_external/test \
            --method gradcam --n_samples 20
+
+Preprocessing is now the unified config (configs/preprocessing.yaml).
 
 This file replaces both `run_xai.py` (original Figshare-only) and
 `run_xai_zenodo.py` (Zenodo-only).

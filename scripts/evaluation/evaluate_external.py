@@ -20,12 +20,14 @@ Supported external datasets:
         <dataset>/infected/*.jpg
         <dataset>/noninfected/*.jpg (or healthy/, normal/)
 
+Preprocessing is now the unified config (configs/preprocessing.yaml).
+
 Usage — inference on an external dataset:
 
     python scripts/evaluate_external.py \
         --run_dir results/ablation/checkpoints/srad/efficientnet_b0/ \
         --model configs/model/efficientnet_b0.yaml \
-        --preprocessing configs/preprocessing/srad.yaml \
+        --preprocessing configs/preprocessing.yaml \
         --checkpoint results/ablation/checkpoints/srad/efficientnet_b0/best.pt \
         --external_dir data_external/pcosgen \
         --external_layout pcosgen

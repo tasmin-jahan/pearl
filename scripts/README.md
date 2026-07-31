@@ -25,13 +25,34 @@ scripts/
 ### `smoke/`
 - `smoke_test.py` — 15 s, 2-epoch sanity check on 10 synthetic images. Run before every long sweep.
 
-### `data/`
-- `dedup_data.py` — md5 dedup on Figshare PCOS folder layout.
-- `build_zenodo_splits.py` — reproducible 80/20 stratified Zenodo PCOSgen splits.
-- `prepare_pcosgen_layout.py` — convert PCOSgen Kaggle folder into `discover_pcosgen` format.
-
 ### `preprocessing/`
-- `preprocess.py` — CLI to apply a preprocessing pipeline and write train/val/test to disk.
+
+The data-prep pipeline is split into two scripts that mirror the
+`scripts/preprocessing/` layout:
+
+- `dedup.py` — three-stage Figshare raw-data prep pipeline:
+  1. `dedup`  — exact-byte (md5) duplicates **plus** near-duplicates
+     (perceptual dHash, default Hamming distance ≤ 0). Use
+     `--cross-dedup` to also catch the same image labeled as both
+     infected and noninfected.
+  2. `rename` — copy survivors to `_renamed/` with canonical padded
+     filenames and write `master_label.csv`.
+  3. `split`  — stratified 15% test split (default), materialised as
+     `train/{images,label.csv}` and `test/{images,label.csv}`.
+  Run all three with `--all`; each stage is idempotent unless `--force`.
+
+- `split.py` — carves a validation split (default 10%) out of an
+  existing `train/` folder. Works on both Figshare and PCOSGen:
+
+  ```bash
+  python scripts/preprocessing/dedup.py --all          # dedup + rename + 15% test split
+  python scripts/preprocessing/split.py --dataset figshare   # carve 10% val from train
+  python scripts/preprocessing/split.py --dataset pcosgen    # same, for PCOSGen
+  ```
+
+- `preprocessing.py` — CLI to apply a preprocessing pipeline (srad/gauss/
+  clahe/etc.) to the canonical `data/raw/<dataset>/{train,val,test}/images/`
+  layout and write preprocessed train/val/test to disk.
 
 ### `train/`
 - `train.py` — single-model trainer. Supports `--resume` for fine-tune.

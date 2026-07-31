@@ -26,17 +26,22 @@ from rich.progress import (
 
 
 ARCHES = [
-    "resnet50", "resnet101", "densenet121", "densenet169",
-    "efficientnet_b0", "convnext_tiny", "mobilenetv3_large",
-    "vit_base", "swin_tiny",
+    "swin_tiny", "vit_base", "convnext_tiny",
+    "densenet169", "efficientnet_b0",
 ]
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--checkpoints_root", default="results/ablation_nopad/checkpoints")
-    ap.add_argument("--configs_root", default="configs/preprocessing")
-    ap.add_argument("--preprocessings", nargs="+", default=["srad_nopad", "gauss_nopad"])
+    ap.add_argument("--configs_root", default="configs/preprocessing.yaml",
+                    help="Path to the unified preprocessing config (kept as a "
+                         "name for back-compat with the old per-preprocessing "
+                         "YAML layout).")
+    ap.add_argument("--preprocessings", nargs="+", default=["default"],
+                    help="Logical preprocessing names to iterate over (for "
+                         "labelling outputs only — all use the same config "
+                         "now). E.g. ['srad', 'gauss'] to label output dirs.")
     ap.add_argument("--architectures", nargs="+", default=ARCHES)
     ap.add_argument("--n_samples", type=int, default=80)
     ap.add_argument("--border_frac", type=float, default=0.05)
@@ -86,7 +91,7 @@ def main():
             cmd = [
                 sys.executable, "scripts/gradcam_shortcut_audit.py",
                 "--model", f"configs/model/{arch}.yaml",
-                "--preprocessing", f"{args.configs_root}/{prep}.yaml",
+                "--preprocessing", args.configs_root,
                 "--checkpoint", ckpt,
                 "--run_dir", run_dir,
                 "--n_samples", str(args.n_samples),

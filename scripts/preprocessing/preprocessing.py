@@ -2,14 +2,24 @@
 """
 CLI entrypoint for preprocessing.
 
-Reads a preprocessing config, applies the pipeline to all images in the
-raw dataset, and saves preprocessed train/val/test splits to disk.
+Reads a preprocessing config (the unified configs/preprocessing.yaml) and
+applies the pipeline to every image in a pre-split dataset directory
+(see scripts/preprocessing/{dedup,split}.py). The data dir must already
+contain the three splits::
+
+    data_dir/
+        train/{infected,notinfected}/*.jpg
+        val/{infected,notinfected}/*.jpg
+        test/{infected,notinfected}/*.jpg
+
+Outputs: ``<output_dir>/{train,val,test}/{infected,noninfected}/*.npy``
+(legacy "noninfected" folder name is preserved).
 
 Usage:
-    python scripts/preprocess.py \\
-        --config configs/preprocessing/srad.yaml \\
-        --data_dir /path/to/figshare_raw \\
-        --split_seed 42
+    python scripts/preprocessing/preprocessing.py \\
+        --config configs/preprocessing.yaml \\
+        --data_dir data/figshare_5x \\
+        --output_dir results/preprocessed/figshare_5x
 """
 
 import argparse
@@ -24,10 +34,46 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 from src.utils.config import load_config
 from src.utils.seed import set_seed
-from src.data.splitter import (
-    get_image_paths_and_labels, stratified_split, _infer_patient_id,
-)
 from src.preprocessing.preprocess import Preprocessor
+
+
+SPLITS = ("train", "val", "test")
+CLASS_FOLDERS = {
+    0: "notinfected",   # input dir name (kept for back-compat)
+    1: "infected",
+}
+OUTPUT_CLASS_FOLDERS = {
+    0: "noninfected",   # legacy output dir name (matches PCOSDataset)
+    1: "infected",
+}
+
+
+def _find_class_dir(split_dir: str, label: int) -> str:
+    """Locate the class folder under a split dir, accepting both
+    ``infected`` and ``noninfected``/``notinfected`` naming."""
+    candidates = ["infected", "notinfected", "noninfected"]
+    for c in candidates:
+        d = os.path.join(split_dir, c)
+        if os.path.isdir(d):
+            if c == "infected":
+                return d
+            # 'notinfected' and 'noninfected' both map to label 0
+            if label == 0:
+                return d
+    return None
+
+
+def _walk_split(split_dir: str):
+    """Return [(path, label), ...] for a split dir."""
+    items = []
+    for label in (1, 0):
+        cdir = _find_class_dir(split_dir, label)
+        if cdir is None:
+            continue
+        for fname in sorted(os.listdir(cdir)):
+            if fname.lower().endswith((".png", ".jpg", ".jpeg", ".bmp", ".tiff")):
+                items.append((os.path.join(cdir, fname), label))
+    return items
 
 
 def main():
@@ -36,25 +82,25 @@ def main():
         "--config",
         type=str,
         required=True,
-        help="Path to preprocessing config YAML",
+        help="Path to preprocessing config YAML (the unified configs/preprocessing.yaml).",
     )
     parser.add_argument(
         "--data_dir",
         type=str,
         required=True,
-        help="Path to raw dataset directory (with infected/ and notinfected/ subdirs)",
+        help="Path to pre-split dataset directory containing train/, val/, test/.",
     )
     parser.add_argument(
-        "--split_seed",
-        type=int,
-        default=42,
-        help="Random seed for the stratified split (default: 42)",
+        "--output_dir",
+        type=str,
+        required=True,
+        help="Path to write preprocessed .npy files (a per-config folder).",
     )
     parser.add_argument(
         "--input_size",
         type=int,
         default=224,
-        help="Resize target size (default: 224)",
+        help="Resize target size (default: 224).",
     )
     parser.add_argument(
         "--no_clean",
@@ -63,115 +109,77 @@ def main():
     )
     args = parser.parse_args()
 
-    set_seed(args.split_seed)
+    set_seed(42)
 
-    # Load preprocessing config
     config = load_config(args.config)
-    output_dir = config.get("output_dir", "results/preprocessed/default")
-    print(f"[Preprocess] Config: {config['name']}")
-    print(f"[Preprocess] Output: {output_dir}")
+    print(f"[Preprocess] Config: {config.get('name', args.config)}")
+    print(f"[Preprocess] Output: {args.output_dir}")
 
-    # ---- Clean output_dir to avoid stale files from a previous split_seed ----
-    if os.path.isdir(output_dir):
+    if os.path.isdir(args.output_dir):
         if args.no_clean:
-            print(f"[Preprocess] --no_clean set: keeping existing {output_dir}")
+            print(f"[Preprocess] --no_clean set: keeping existing {args.output_dir}")
         else:
             import shutil
-            shutil.rmtree(output_dir)
-            print(f"[Preprocess] Cleared previous {output_dir}")
-    os.makedirs(output_dir, exist_ok=True)
+            shutil.rmtree(args.output_dir)
+            print(f"[Preprocess] Cleared previous {args.output_dir}")
+    os.makedirs(args.output_dir, exist_ok=True)
 
-    # Get image paths, labels, and patient_ids (group keys)
-    image_paths, labels, patient_ids = get_image_paths_and_labels(args.data_dir)
-
-    # Stratified split (group-aware if patient_ids have repeats)
-    (
-        train_paths, train_labels,
-        val_paths, val_labels,
-        test_paths, test_labels,
-    ) = stratified_split(
-        image_paths, labels,
-        patient_ids=patient_ids, seed=args.split_seed,
-    )
-
-    # Initialize preprocessor (NO augmentation — that happens at train time)
     preprocessor = Preprocessor(config, input_size=args.input_size)
 
-    # Process and save each split
-    class_names = {0: "noninfected", 1: "infected"}
-    for split_name, paths, split_labels in [
-        ("train", train_paths, train_labels),
-        ("val", val_paths, val_labels),
-        ("test", test_paths, test_labels),
-    ]:
-        print(f"\n[Preprocess] Processing {split_name} split ({len(paths)} images)...")
-        for img_path, label in zip(paths, split_labels):
-            # Read image
+    expected_total = 0
+    actual_total = 0
+    class_counts = {s: {0: 0, 1: 0} for s in SPLITS}
+
+    for split_name in SPLITS:
+        split_dir = os.path.join(args.data_dir, split_name)
+        if not os.path.isdir(split_dir):
+            print(f"[Preprocess] WARNING: missing {split_dir} — skipping")
+            continue
+        items = _walk_split(split_dir)
+        print(f"\n[Preprocess] Processing {split_name} split ({len(items)} images)...")
+        for img_path, label in items:
             image = cv2.imread(img_path)
             if image is None:
                 print(f"  WARNING: Could not read {img_path}, skipping.")
                 continue
-
-            # Apply preprocessing (no augmentation at save time)
             processed = preprocessor.apply(image, augment=False)
-
-            # Save to output directory preserving class structure
-            class_name = class_names[label]
-            save_dir = os.path.join(output_dir, split_name, class_name)
-            os.makedirs(save_dir, exist_ok=True)
-
+            out_dir = os.path.join(
+                args.output_dir, split_name, OUTPUT_CLASS_FOLDERS[label],
+            )
+            os.makedirs(out_dir, exist_ok=True)
             fname = os.path.basename(img_path)
-            # Save as numpy array (.npy) to preserve float values
-            save_path = os.path.join(save_dir, fname.rsplit(".", 1)[0] + ".npy")
+            save_path = os.path.join(out_dir, fname.rsplit(".", 1)[0] + ".npy")
             np.save(save_path, processed)
-
+            class_counts[split_name][label] += 1
+            actual_total += 1
         # Log class counts
-        unique, counts = np.unique(split_labels, return_counts=True)
-        count_str = ", ".join(
-            f"{class_names[u]}: {c}" for u, c in zip(unique, counts)
-        )
-        print(f"  {split_name} class counts: {count_str}")
+        n0 = class_counts[split_name][0]
+        n1 = class_counts[split_name][1]
+        print(f"  {split_name} class counts: noninfected={n0}, infected={n1}")
 
-    # ---- Post-run verification (Bug 3 fix) ----
-    # Confirms that the output directory contains exactly the expected
-    # number of .npy files (one per input image, across all three splits)
-    # and that class ratios roughly mirror the input. If split_seed was
-    # changed between runs, this catches leftover stale files in adjacent
-    # split folders.
-    print(f"\n[Preprocess] Verifying output...")
-    expected_total = len(image_paths)
-    actual_total = 0
-    class_counts = {"train": {0: 0, 1: 0}, "val": {0: 0, 1: 0}, "test": {0: 0, 1: 0}}
-    for split_name in ("train", "val", "test"):
-        for cls_name, cls_label in [("infected", 1), ("noninfected", 0)]:
-            cls_dir = os.path.join(output_dir, split_name, cls_name)
-            if not os.path.isdir(cls_dir):
-                continue
-            n = sum(1 for f in os.listdir(cls_dir) if f.endswith(".npy"))
-            actual_total += n
-            class_counts[split_name][cls_label] = n
+    # Compute expected total under the assumption: every input image gets
+    # exactly one .npy output. We use the discovered items list as
+    # ground truth.
+    expected_total = sum(
+        len(_walk_split(os.path.join(args.data_dir, s))) for s in SPLITS
+        if os.path.isdir(os.path.join(args.data_dir, s))
+    )
+
     if actual_total != expected_total:
         print(
-            f"  WARNING: expected {expected_total} files, found {actual_total}."
-        )
-        print(
-            f"  This usually means --no_clean was set or the output_dir had"
-        )
-        print(
-            f"  leftover files from a previous run with a different --split_seed."
+            f"\n[Preprocess] WARNING: expected {expected_total} files, "
+            f"wrote {actual_total}."
         )
     else:
-        print(f"  OK: {actual_total} .npy files match expected (one per input image).")
+        print(f"\n[Preprocess] OK: {actual_total} .npy files written.")
     print(f"\n  Final split table:")
     print(f"  {'split':<8} {'noninfected':>14} {'infected':>12} {'ratio':>10}")
-    for split_name in ("train", "val", "test"):
+    for split_name in SPLITS:
         n_neg = class_counts[split_name][0]
         n_pos = class_counts[split_name][1]
         ratio = f"{n_pos / max(n_neg, 1):.2f}:1" if n_neg > 0 else "—"
         print(f"  {split_name:<8} {n_neg:>14} {n_pos:>12} {ratio:>10}")
-    print(
-        f"\n[Preprocess] Done! Preprocessed data saved to {output_dir}"
-    )
+    print(f"\n[Preprocess] Done! Preprocessed data saved to {args.output_dir}")
 
 
 if __name__ == "__main__":

@@ -16,7 +16,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from src.utils.config import load_config
+from src.utils.config import load_config, DEFAULT_PREPROCESSING_CONFIG
 from src.utils.seed import set_seed
 from src.utils.logging import ExperimentLogger, make_arch_dir
 from src.data.dataloader import build_dataloaders
@@ -130,7 +130,7 @@ def main():
     results_dir = experiment_config.get("results_dir", "results/")
 
     models = experiment_config.get("models", [])
-    preprocessings = experiment_config.get("preprocessing", [])
+    preprocessings = experiment_config.get("preprocessing", ["default"])
 
     import torch
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -195,8 +195,11 @@ def main():
 
         for preproc_name in preprocessings:
             run_idx += 1
-            preproc_config_path = os.path.join("configs", "preprocessing", f"{preproc_name}.yaml")
-            preproc_config = load_config(preproc_config_path)
+            # Preprocessing is now controlled by the single unified config at
+            # configs/preprocessing.yaml — the same flags apply to every run.
+            # ``preproc_name`` is kept only as a label for output paths so the
+            # sweep matrix still has a column to group by.
+            preproc_config = load_config(DEFAULT_PREPROCESSING_CONFIG)
 
             # Skip already-completed runs so a resumed sweep doesn't
             # re-train the architectures that finished in a previous

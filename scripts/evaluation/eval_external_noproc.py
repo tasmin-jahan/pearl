@@ -44,7 +44,7 @@ IMAGENET_STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 def noproc_apply(img: np.ndarray, input_size: int) -> np.ndarray:
     """Apply only resize (aspect-preserving letterbox) + ImageNet normalize.
 
-    No CLAHE, no SRAD, no anisotropic diffusion. This is the simplest
+    No CLAHE, no SRAD. This is the simplest
     preprocessing a timm pretrained model would expect.
     """
     h, w = img.shape[:2]

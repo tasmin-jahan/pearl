@@ -10,6 +10,11 @@ import yaml
 from copy import deepcopy
 
 
+# Single canonical preprocessing config. Toggle flags inside this YAML
+# to compose your preprocessing pipeline. No more per-preprocessing YAMLs.
+DEFAULT_PREPROCESSING_CONFIG = "configs/preprocessing.yaml"
+
+
 def load_config(path: str) -> dict:
     """Load a single YAML config file.
 

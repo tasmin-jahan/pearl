@@ -1,4 +1,0 @@
-split,infected,noninfected,total,infected_frac
-test,325,81,406,0.8005
-train,2549,650,3199,0.7968
-val,310,81,391,0.7928

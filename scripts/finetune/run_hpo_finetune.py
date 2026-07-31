@@ -192,7 +192,7 @@ def main():
 
         # Re-evaluate the retrained checkpoint
         model_cfg = f"configs/model/{arch}.yaml"
-        preproc_cfg = f"configs/preprocessing/{prep}.yaml"
+        preproc_cfg = "configs/preprocessing.yaml"
         _run_external_eval(
             ckpt=new_best,
             model_cfg=model_cfg,

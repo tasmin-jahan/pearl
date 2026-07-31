@@ -34,16 +34,14 @@ plt.rcParams.update({
 
 # Architecture + preprocessing display order
 ARCHES = [
-    "resnet50", "resnet101", "densenet121", "densenet169",
-    "efficientnet_b0", "convnext_tiny", "mobilenetv3_large",
-    "vit_base", "swin_tiny",
+    "swin_tiny", "vit_base", "convnext_tiny",
+    "densenet169", "efficientnet_b0",
 ]
 PREPS = ["srad", "gauss"]
 ARCH_LABEL = {
-    "resnet50": "ResNet-50", "resnet101": "ResNet-101",
-    "densenet121": "DenseNet-121", "densenet169": "DenseNet-169",
-    "efficientnet_b0": "EfficientNet-B0", "convnext_tiny": "ConvNeXt-Tiny",
-    "mobilenetv3_large": "MobileNetV3-L", "vit_base": "ViT-B/16", "swin_tiny": "Swin-T",
+    "swin_tiny": "Swin-T", "vit_base": "ViT-B/16",
+    "convnext_tiny": "ConvNeXt-Tiny", "densenet169": "DenseNet-169",
+    "efficientnet_b0": "EfficientNet-B0",
 }
 PREP_LABEL = {"srad": "SRAD", "gauss": "Gauss"}
 

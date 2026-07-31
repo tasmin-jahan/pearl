@@ -10,8 +10,8 @@ flags are documented; every workflow has a copy-paste command block.
 1. [Setup](#setup)
 2. [End-to-end quick start (Phase 0 → 6)](#end-to-end-quick-start)
 3. [CLI Reference](#cli-reference)
-   - [scripts/dedup_data.py](#scriptsdedup_datapy)
-   - [scripts/preprocess.py](#scriptspreprocesspy)
+   - [scripts/preprocessing/dedup_split.py](#scriptspreprocessingdedup_splitpy)
+   - [scripts/preprocessing/preprocessing.py](#scriptspreprocesspy)
    - [scripts/train.py](#scriptstrainpy)
    - [scripts/sweep.py](#scriptssweeppy)
    - [scripts/tune.py](#scriptstunepy)
@@ -70,12 +70,12 @@ previous one to have finished.
 
 ```bash
 # Step 1 — Preprocess both ablation arms
-python scripts/preprocess.py \
-    --config configs/preprocessing/srad.yaml \
+python scripts/preprocessing/preprocessing.py \
+    --config configs/preprocessing.yaml \
     --data_dir $DATA_DIR --split_seed 42
 
-python scripts/preprocess.py \
-    --config configs/preprocessing/gauss.yaml \
+python scripts/preprocessing/preprocessing.py \
+    --config configs/preprocessing.yaml \
     --data_dir $DATA_DIR --split_seed 42
 
 # Step 2 — Run the 18-run ablation (9 archs × 2 denoising configs)
@@ -105,20 +105,20 @@ python scripts/kfold_finalists.py \
 # Step 6 — Downstream analyses (per-model)
 python scripts/run_calibration.py \
     --model configs/model/swin_tiny.yaml \
-    --preprocessing configs/preprocessing/srad.yaml \
+    --preprocessing configs/preprocessing.yaml \
     --checkpoint results/checkpoints/srad/swin_tiny/best.pt \
     --run_dir results/checkpoints/srad/swin_tiny
 
 python scripts/run_xai.py \
     --model configs/model/swin_tiny.yaml \
-    --preprocessing configs/preprocessing/srad.yaml \
+    --preprocessing configs/preprocessing.yaml \
     --checkpoint results/checkpoints/srad/swin_tiny/best.pt \
     --run_dir results/checkpoints/srad/swin_tiny \
     --methods gradcam lrp shap --n_samples 20
 
 python scripts/run_uncertainty.py \
     --model configs/model/swin_tiny.yaml \
-    --preprocessing configs/preprocessing/srad.yaml \
+    --preprocessing configs/preprocessing.yaml \
     --checkpoint results/checkpoints/srad/swin_tiny/best.pt \
     --run_dir results/checkpoints/srad/swin_tiny \
     --mc_passes 50
@@ -128,7 +128,7 @@ python scripts/run_calibration_ensemble.py \
     --model_configs configs/model/swin_tiny.yaml configs/model/convnext_tiny.yaml \
     --checkpoints results/checkpoints/srad/swin_tiny/best.pt \
                   results/checkpoints/srad/convnext_tiny/best.pt \
-    --preprocessing configs/preprocessing/srad.yaml
+    --preprocessing configs/preprocessing.yaml
 ```
 
 ---
@@ -139,37 +139,51 @@ Every script is documented below with **Flag | Type | Default | Description**.
 
 ---
 
-### `scripts/dedup_data.py`
+### `scripts/preprocessing/dedup_split.py`
 
-Find and remove exact-byte duplicates from a class-folder dataset.
+Three-stage Figshare raw-data prep pipeline. Operates only on
+`data/raw/figshare/` and produces a layout that matches
+`data/raw/pcosgen/`, so the downstream preprocessing pipeline treats
+both datasets identically.
+
 The Figshare PCOS dataset ships with substantial duplication
 (only 16.2% of `noninfected/` and 46.9% of `infected/` files are
 unique — see `notebooks/eda_figures/01_class_balance.png` and
 `docs/methodology.tex § Data deduplication`). Run this **before**
-`preprocess.py` to avoid wasting compute on repeated images.
+`preprocessing.py` to avoid wasting compute on repeated images.
 
 ```bash
-python scripts/dedup_data.py --data_dir data --mode report      # audit only
-python scripts/dedup_data.py --data_dir data --mode quarantine  # move dupes
-python scripts/dedup_data.py --data_dir data --mode remove --yes  # destructive
+# Run all three stages (idempotent unless --force):
+python scripts/preprocessing/dedup_split.py --all
+
+# Or run individually:
+python scripts/preprocessing/dedup_split.py dedup
+python scripts/preprocessing/dedup_split.py rename
+python scripts/preprocessing/dedup_split.py split --seed 42 --test-frac 0.2
 ```
+
+Stages:
+
+1. `dedup` — md5-hashes every file in `infected/` and `noninfected/`,
+   moves exact-byte duplicates into `_duplicates/<class>/`. Idempotent.
+2. `rename` — copies survivors into `_renamed/` with canonical padded
+   filenames (`image0000.jpg..image3995.jpg`). Noninfected first
+   (label = Not-visible), then infected (label = Visible).
+   Writes `master_label.csv` (3996 rows, `imagePath,PCOS-visible`).
+3. `split` — stratified 80/20 train/test split, materialised as
+   `train/{images,label.csv}` and `test/{images,label.csv}` (the
+   same layout as `data/raw/pcosgen/{train,test}/`).
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--data_dir` | str | `data` | Root directory containing the class folders. |
-| `--mode` | str | `report` | One of `report`, `quarantine`, `remove`. |
-| `--classes` | str list | `infected noninfected` | Class folder names to scan. |
+| `--all` | flag | off | Run all three stages in order. |
+| `--force` | flag | off | Re-run a stage even if its outputs already exist. |
+| `--dry-run` | flag | off | Print what would happen, change nothing. |
 | `--extensions` | str list | `.jpg .jpeg .png .bmp .tiff` | File extensions to consider. |
-| `--report_dir` | str | `results/eda` | Where to write the CSV reports. |
-| `--quarantine_dir` | str | `data/_duplicates` | Destination for quarantined files. |
-| `--yes` | flag | off | Required for `mode=remove` (destructive). |
+| `--seed` | int (split only) | `42` | Random seed for the stratified split. |
+| `--test-frac` | float (split only) | `0.2` | Fraction of samples to put in `test/`. |
 
-**Outputs**:
-- `report` mode: writes `dedup_report.csv` (per-class counts) and `dedup_details.csv` (every duplicate path + MD5 + kept/removed flag). No files are touched.
-- `quarantine` mode: also moves duplicates into `<quarantine_dir>/<class>/`. Reversible: `mv data/_duplicates/<class>/* data/<class>/`.
-- `remove` mode: permanently deletes duplicates (requires `--yes`).
-
-### `scripts/preprocess.py`
+### `scripts/preprocessing/preprocessing.py`
 
 Reads a preprocessing config, runs the pipeline (letterbox resize →
 CLAHE → denoise → Z-score), performs the 80/10/10 stratified split
@@ -178,8 +192,8 @@ with patient-level leakage check, and saves `.npy` files to disk.
 **Required before**: nothing (this is the first step).
 
 ```bash
-python scripts/preprocess.py \
-    --config configs/preprocessing/<name>.yaml \
+python scripts/preprocessing/preprocessing.py \
+    --config configs/preprocessing.yaml \
     --data_dir /path/to/data \
     [--split_seed 42] \
     [--input_size 224]
@@ -187,7 +201,7 @@ python scripts/preprocess.py \
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--config` | str | **required** | Path to preprocessing config YAML. Use `configs/preprocessing/srad.yaml` or `gauss.yaml` for the v3 ablation. |
+| `--config` | str | **required** | Path to preprocessing config YAML. Use `configs/preprocessing.yaml` or `gauss.yaml` for the v3 ablation. |
 | `--data_dir` | str | **required** | Path to raw dataset directory containing `infected/` and `noninfected/` subdirs. |
 | `--split_seed` | int | `42` | Random seed for the stratified 80/10/10 split. Use the same seed across all preprocess runs to keep splits identical. |
 | `--input_size` | int | `224` | Resize target. All v3 models use 224. The longer side is scaled to this size and the shorter side is letterbox-padded — see the `steps.padding` config key below. |
@@ -223,12 +237,12 @@ splits.
 
 ```bash
 # v3 ablation: both arms
-python scripts/preprocess.py \
-    --config configs/preprocessing/srad.yaml \
+python scripts/preprocessing/preprocessing.py \
+    --config configs/preprocessing.yaml \
     --data_dir $DATA_DIR --split_seed 42
 
-python scripts/preprocess.py \
-    --config configs/preprocessing/gauss.yaml \
+python scripts/preprocessing/preprocessing.py \
+    --config configs/preprocessing.yaml \
     --data_dir $DATA_DIR --split_seed 42
 ```
 
@@ -239,13 +253,13 @@ python scripts/preprocess.py \
 Trains a single model on preprocessed data. Optionally resumes from
 a checkpoint and supports inline `--set` overrides.
 
-**Required before**: `scripts/preprocess.py` for the matching
+**Required before**: `scripts/preprocessing/preprocessing.py` for the matching
 `--preprocessing` config.
 
 ```bash
 python scripts/train.py \
     --model configs/model/<arch>.yaml \
-    --preprocessing configs/preprocessing/<name>.yaml \
+    --preprocessing configs/preprocessing.yaml \
     --experiment configs/experiment/<name>.yaml \
     [--run_dir results/checkpoints/<prep>/<arch>/] \
     [--resume results/checkpoints/<prep>/<arch>/best.pt] \
@@ -255,7 +269,7 @@ python scripts/train.py \
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--model` | str | **required** | Path to model config YAML. e.g. `configs/model/swin_tiny.yaml`. |
-| `--preprocessing` | str | **required** | Path to preprocessing config YAML. Must already be on disk from `scripts/preprocess.py`. |
+| `--preprocessing` | str | **required** | Path to preprocessing config YAML. Must already be on disk from `scripts/preprocessing/preprocessing.py`. |
 | `--experiment` | str | **required** | Path to experiment config YAML. e.g. `configs/experiment/best_model_xai.yaml`. Provides `training:` block (lr, epochs, etc.) and `seed:`. |
 | `--run_dir` | str | auto-generated | Override the run output directory. Default: `results/<root>/checkpoints/<prep>/<arch>/`. |
 | `--resume` | str | `None` | Path to a checkpoint to resume from. Restores model + optimizer + scheduler + EMA + RNG. |
@@ -285,20 +299,20 @@ external_validation/     # populated by scripts/evaluate_external.py
 # Basic single run
 python scripts/train.py \
     --model configs/model/swin_tiny.yaml \
-    --preprocessing configs/preprocessing/srad.yaml \
+    --preprocessing configs/preprocessing.yaml \
     --experiment configs/experiment/best_model_xai.yaml
 
 # Run with overridden hyperparameters
 python scripts/train.py \
     --model configs/model/swin_tiny.yaml \
-    --preprocessing configs/preprocessing/srad.yaml \
+    --preprocessing configs/preprocessing.yaml \
     --experiment configs/experiment/best_model_xai.yaml \
     --set training.lr=5e-4 training.batch_size=16
 
 # Resume from a previous run
 python scripts/train.py \
     --model configs/model/swin_tiny.yaml \
-    --preprocessing configs/preprocessing/srad.yaml \
+    --preprocessing configs/preprocessing.yaml \
     --experiment configs/experiment/best_model_xai.yaml \
     --resume results/checkpoints/srad/swin_tiny/best.pt
 ```
@@ -311,7 +325,7 @@ Iterates over `(model, preprocessing)` pairs from an experiment config
 and runs each one through `scripts/train.py`-equivalent training. Used
 for the Phase 0 ablation (18 runs).
 
-**Required before**: `scripts/preprocess.py` for EVERY preprocessing
+**Required before**: `scripts/preprocessing/preprocessing.py` for EVERY preprocessing
 config named in the experiment config.
 
 ```bash
@@ -351,7 +365,7 @@ python scripts/tune.py \
 | `--study_name` | str | `pcos_tuning` | Optuna study name. |
 | `--storage` | str | `None` | Optuna storage URL (e.g. SQLite). If set, the study is persisted and resumable. |
 
-**Required before**: `scripts/preprocess.py` for the preprocessing
+**Required before**: `scripts/preprocessing/preprocessing.py` for the preprocessing
 config named in the experiment config.
 
 **Outputs** under `results/tuning/`:
@@ -369,7 +383,7 @@ all_trials.csv
 Per-architecture Optuna HPO sweep across all 9 architectures. Picks
 the top-k finalists by val AUC.
 
-**Required before**: `scripts/preprocess.py` for the winning
+**Required before**: `scripts/preprocessing/preprocessing.py` for the winning
 preprocessing config (the one whose name is in the experiment
 config's `preprocessing:` field).
 
@@ -455,13 +469,13 @@ kfold_summary.csv           # per-fold AUC per arch
 Standalone evaluation of a trained model on the test set. Useful for
 recomputing metrics from a checkpoint outside the training flow.
 
-**Required before**: `scripts/preprocess.py` for the matching
+**Required before**: `scripts/preprocessing/preprocessing.py` for the matching
 `--preprocessing` config.
 
 ```bash
 python scripts/evaluate.py \
     --model configs/model/<arch>.yaml \
-    --preprocessing configs/preprocessing/<name>.yaml \
+    --preprocessing configs/preprocessing.yaml \
     --checkpoint results/checkpoints/<prep>/<arch>/best.pt \
     [--output results/eval/<arch>.json]
 ```
@@ -500,7 +514,7 @@ apples.
 python scripts/evaluate_external.py \
     --run_dir results/checkpoints/srad/efficientnet_b0/ \
     --model configs/model/efficientnet_b0.yaml \
-    --preprocessing configs/preprocessing/srad.yaml \
+    --preprocessing configs/preprocessing.yaml \
     --checkpoint results/checkpoints/srad/efficientnet_b0/best.pt \
     --external_dir /home/farhan/my-projects/pearl/data_external/pcosgen \
     --external_layout pcosgen
@@ -551,13 +565,13 @@ performance of the model as trained on the Figshare PCOS dataset.
 
 Per-model temperature scaling (Pass 1 of two-pass calibration).
 
-**Required before**: `scripts/preprocess.py` for the matching
+**Required before**: `scripts/preprocessing/preprocessing.py` for the matching
 `--preprocessing` config.
 
 ```bash
 python scripts/run_calibration.py \
     --model configs/model/<arch>.yaml \
-    --preprocessing configs/preprocessing/<name>.yaml \
+    --preprocessing configs/preprocessing.yaml \
     --checkpoint results/checkpoints/<prep>/<arch>/best.pt \
     --run_dir results/checkpoints/<prep>/<arch>/ \
     [--n_bins 15]
@@ -587,14 +601,14 @@ bin_data.csv
 Two-pass ensemble calibration: per-model T (Pass 1) + ensemble T
 (Pass 2).
 
-**Required before**: `scripts/preprocess.py` for the matching
+**Required before**: `scripts/preprocessing/preprocessing.py` for the matching
 `--preprocessing` config.
 
 ```bash
 python scripts/run_calibration_ensemble.py \
     --model_configs configs/model/a.yaml configs/model/b.yaml \
     --checkpoints results/checkpoints/<prep>/a/best.pt results/checkpoints/<prep>/b/best.pt \
-    --preprocessing configs/preprocessing/<name>.yaml \
+    --preprocessing configs/preprocessing.yaml \
     [--n_bins 15] \
     [--out_dir results/calibration_ensemble]
 ```
@@ -624,7 +638,7 @@ python scripts/run_calibration_ensemble.py \
     --model_configs configs/model/swin_tiny.yaml configs/model/convnext_tiny.yaml \
     --checkpoints results/checkpoints/srad/swin_tiny/best.pt \
                   results/checkpoints/srad/convnext_tiny/best.pt \
-    --preprocessing configs/preprocessing/srad.yaml
+    --preprocessing configs/preprocessing.yaml
 ```
 
 ---
@@ -635,13 +649,13 @@ Generates Grad-CAM, LRP, and SHAP explanations for 20 representative
 test samples (5 per group: confident-correct, overconfident-error,
 uncertain-correct, uncertain-wrong).
 
-**Required before**: `scripts/preprocess.py` for the matching
+**Required before**: `scripts/preprocessing/preprocessing.py` for the matching
 `--preprocessing` config.
 
 ```bash
 python scripts/run_xai.py \
     --model configs/model/<arch>.yaml \
-    --preprocessing configs/preprocessing/<name>.yaml \
+    --preprocessing configs/preprocessing.yaml \
     --checkpoint results/checkpoints/<prep>/<arch>/best.pt \
     --run_dir results/checkpoints/<prep>/<arch>/ \
     [--methods gradcam lrp shap] \
@@ -677,13 +691,13 @@ MC Dropout uncertainty + referral system. 50 stochastic forward
 passes (default) for predictive entropy, plus a coverage-accuracy
 sweep.
 
-**Required before**: `scripts/preprocess.py` for the matching
+**Required before**: `scripts/preprocessing/preprocessing.py` for the matching
 `--preprocessing` config.
 
 ```bash
 python scripts/run_uncertainty.py \
     --model configs/model/<arch>.yaml \
-    --preprocessing configs/preprocessing/<name>.yaml \
+    --preprocessing configs/preprocessing.yaml \
     --checkpoint results/checkpoints/<prep>/<arch>/best.pt \
     --run_dir results/checkpoints/<prep>/<arch>/ \
     [--mc_passes 50] \
@@ -757,7 +771,7 @@ head:
 | `head.hidden_dim` | int | Hidden dimension of the first FC layer in the head. |
 | `head.dropout` | float | Dropout rate after the first head activation. Optuna sweeps over [0.3, 0.7]. |
 
-### `configs/preprocessing/<name>.yaml`
+### `configs/preprocessing.yaml`
 
 ```yaml
 name: srad
@@ -921,7 +935,7 @@ run exactly.
 ```bash
 python scripts/train.py \
     --model configs/model/swin_tiny.yaml \
-    --preprocessing configs/preprocessing/srad.yaml \
+    --preprocessing configs/preprocessing.yaml \
     --experiment configs/experiment/best_model_xai.yaml \
     --resume results/checkpoints/<prep>/<arch>/best.pt
 ```

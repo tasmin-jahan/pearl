@@ -1,7 +1,0 @@
-lr: 5.370211932131591e-05
-weight_decay: 0.0018802252562895355
-dropout: 0.2449364041886566
-rotation: 0
-label_smoothing: 0.09228116872436672
-freeze_fraction: 0.0
-batch_size: 64

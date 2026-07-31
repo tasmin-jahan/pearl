@@ -32,7 +32,7 @@ import yaml
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from src.utils.config import load_config
+from src.utils.config import load_config, DEFAULT_PREPROCESSING_CONFIG
 from src.utils.seed import set_seed
 from src.utils.logging import ExperimentLogger
 from src.data.zenodo_dataset import build_zenodo_loader
@@ -69,7 +69,7 @@ def retrain_one(prep, arch, hpo_dir, resume_root, figshare_root,
 
     # Per-arch configs
     model_config = load_config(f"configs/model/{arch}.yaml")
-    preproc_config = load_config(f"configs/preprocessing/{prep}.yaml")
+    preproc_config = load_config(DEFAULT_PREPROCESSING_CONFIG)
     model_config = dict(model_config)
     model_config["freeze_fraction"] = float(params["freeze_fraction"])
     head = dict(model_config.get("head", {}))

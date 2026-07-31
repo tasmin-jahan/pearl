@@ -72,7 +72,6 @@ def test_external_dataset_construction():
             "clahe": {"enabled": False},
             "gaussian": {"enabled": False},
             "srad": {"enabled": False},
-            "anisotropic_diffusion": {"enabled": False},
             "zscore_normalize": {"enabled": False},
         },
         "augmentation": {"rotation": 0, "horizontal_flip": False, "scale": 0},

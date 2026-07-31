@@ -8,13 +8,15 @@ Supports two evaluation contexts via --test_dir:
    loaders. Use:
        python scripts/calibration/run_calibration.py \
            --model configs/model/swin_tiny.yaml \
-           --preprocessing configs/preprocessing/srad.yaml \
+           --preprocessing configs/preprocessing.yaml \
            --checkpoint results/checkpoints/srad/swin_tiny.pt
        python scripts/calibration/run_calibration.py --run_dir <run_dir> [--test_dir <path>]
 
 2. Zenodo mode (--test_dir set, --run_dir set): runs calibration on an external
    held-out test set (e.g. Zenodo PCOSgen) with a 50/50 split inside the test set
    to fit T honestly without using val data.
+
+Preprocessing is now the unified config (configs/preprocessing.yaml).
 
 This file replaces both `run_calibration.py` (original Figshare-only version) and
 `run_calibration_zenodo.py` (Zenodo-only version).
