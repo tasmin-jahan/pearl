@@ -119,6 +119,29 @@ def _run_single(
         os.path.join(out_dir, "bin_data.csv"), index=False
     )
 
+    # Compute the full metric stack on calibrated probabilities so callers
+    # can directly compare threshold-0.5 accuracy / Youden / sensitivity-
+    # targeted op-point before vs after temperature scaling. This is the
+    # headline number you'd quote for a calibration fix on a model that's
+    # been collapsed to "always positive" out of distribution.
+    from src.evaluation.metrics import compute_all_metrics
+    test_preds_after = (test_probs_after >= 0.5).astype(int)
+    calibrated_metrics = compute_all_metrics(
+        test_labels_np, test_preds_after, test_probs_after,
+        compute_bootstrap_ci=True,
+    )
+    calibrated_metrics["optimal_temperature"] = round(float(optimal_T), 4)
+    calibrated_metrics["ece_after"] = round(float(ece_after), 4)
+    with open(os.path.join(out_dir, "calibrated_metrics.json"), "w") as f:
+        json.dump(calibrated_metrics, f, indent=2)
+    print(
+        f"[Calibration] Calibrated metrics: "
+        f"acc={calibrated_metrics['test_accuracy']:.4f}  "
+        f"auc={calibrated_metrics['test_auc_roc']:.4f}  "
+        f"f1={calibrated_metrics['test_f1']:.4f}  "
+        f"youden_acc={calibrated_metrics['youden_accuracy']:.4f}"
+    )
+
     def _nll(logits, labels, T):
         scaled = logits / T
         log_probs = F.log_softmax(scaled, dim=1)

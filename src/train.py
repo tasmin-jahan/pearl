@@ -96,6 +96,7 @@ DEFAULT_TRAINING_CONFIG: Dict[str, object] = {
     "compile": False,
     "grad_clip_norm": 1.0,
     "save_rng_state": True,
+    "label_smoothing": 0.05,
 }
 
 
@@ -217,7 +218,10 @@ def run_training(
         _load_initial_weights(model, checkpoint, device)
 
     class_weights = train_loader.dataset.get_class_weights()
-    criterion = build_weighted_loss(class_weights, device=device)
+    criterion = build_weighted_loss(
+        class_weights, device=device,
+        label_smoothing=float(training_config.get("label_smoothing", 0.05)),
+    )
 
     os.makedirs(output_dir, exist_ok=True)
     run_config = {
@@ -374,6 +378,7 @@ def _build_training_config(args) -> dict:
             "bf16": args.bf16,
             "channels_last": args.channels_last,
             "compile": args.compile,
+            "label_smoothing": args.label_smoothing,
         }
     )
     return cfg
@@ -513,6 +518,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--patience", type=int, default=20)
     parser.add_argument("--dropout", type=float, default=0.5)
     parser.add_argument("--freeze-fraction", type=float, default=0.60)
+    parser.add_argument(
+        "--label-smoothing", type=float, default=0.05,
+        help="Label smoothing epsilon for CE loss. 0.05 default; "
+             "set to 0.0 to disable.",
+    )
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument(
         "--sampler", choices=("weighted", "shuffle", "none"), default="weighted"

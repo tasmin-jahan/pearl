@@ -22,7 +22,7 @@ import torch.nn as nn
 from PIL import Image
 
 from src.data.dataloader import build_test_loader
-from src.evaluation import run_evaluate
+from src.evaluation import evaluate as run_evaluate
 from src.training.checkpoint import save_checkpoint
 from src.utils.config import load_config
 
