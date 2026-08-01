@@ -351,6 +351,94 @@ def _build_training_config(args) -> dict:
     return cfg
 
 
+def _resolve_sweep_checkpoint(
+    sweep_root: str, model_short: str, dataset_name: str,
+) -> Optional[str]:
+    """Find ``<sweep_root>/<dataset_name>/<model_short>/best.pt`` if it exists.
+
+    Used when the user wants to fine-tune all models in one invocation:
+    every model's checkpoint is expected to live in the matching
+    ``<dataset>/<arch>/`` subdirectory under the sweep root.
+    """
+    candidates = [
+        os.path.join(sweep_root, dataset_name, model_short, "best.pt"),
+        os.path.join(sweep_root, model_short, "best.pt"),
+        os.path.join(sweep_root, f"{model_short}.pt"),
+    ]
+    for c in candidates:
+        if os.path.isfile(c):
+            return c
+    return None
+
+
+def run_sweep(
+    *,
+    dataset_dir: str,
+    model_names: List[str],
+    preproc_config: dict,
+    training_config: dict,
+    output_root: Optional[str],
+    checkpoint: Optional[str] = None,
+    sweep_checkpoints: Optional[str] = None,
+    device: Optional[str] = None,
+    seed: int = 42,
+) -> Dict[str, dict]:
+    """Train or fine-tune multiple models sequentially.
+
+    Args:
+        dataset_dir: Preprocessed PNG dataset root.
+        model_names: List of model short names (or YAML paths).
+        preproc_config: Loaded preprocessing config.
+        training_config: Built training config dict.
+        output_root: Where to write results. Each model gets
+            ``<output_root>/<dataset>/<model>/``. If ``None``,
+            defaults to ``results/training``.
+        checkpoint: Single checkpoint path applied to every model.
+        sweep_checkpoints: Root directory searched per-model for a
+            ``best.pt`` to initialize from. Ignored if ``checkpoint``
+            is also given.
+        device: Device string.
+        seed: Seed (reset per model for determinism).
+
+    Returns:
+        Mapping ``model_name → metrics dict``.
+    """
+    dataset_name = Path(dataset_dir).name
+    output_root = output_root or os.path.join("results", "training")
+    results: Dict[str, dict] = {}
+    for name in model_names:
+        short = Path(name).stem
+        ckpt = checkpoint
+        if ckpt is None and sweep_checkpoints is not None:
+            ckpt = _resolve_sweep_checkpoint(
+                sweep_checkpoints, short, dataset_name,
+            )
+            if ckpt is not None:
+                print(f"[Sweep] {short}: initializing from {ckpt}")
+            else:
+                print(f"[Sweep] {short}: no checkpoint under "
+                      f"{sweep_checkpoints!r}, training from scratch")
+        set_seed(seed)
+        run_dir = os.path.join(output_root, dataset_name, short)
+        try:
+            metrics = run_training(
+                dataset_dir=dataset_dir,
+                model_name=name,
+                preproc_config=preproc_config,
+                training_config=training_config,
+                output_dir=run_dir,
+                checkpoint=ckpt,
+                device=device,
+            )
+            results[short] = metrics
+        except Exception as exc:
+            print(f"[Sweep] {short} FAILED: {exc}")
+            results[short] = {"error": str(exc)}
+    print(f"\n[Sweep] Done. {len(results)} models run. "
+          f"Output root: {output_root}")
+    return results
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Train PEARL on preprocessed PNG data.")
     parser.add_argument(
@@ -358,8 +446,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Preprocessed dataset root with train/val/test (e.g. data/preprocessed/figshare).",
     )
     parser.add_argument(
-        "--model", required=True,
-        help=f"Model name ({', '.join(SUPPORTED_MODELS)}) or model YAML path.",
+        "--model", action="append", default=[],
+        help=(
+            "Model name or YAML path. May be repeated to train/finetune "
+            "multiple models in one invocation (e.g. "
+            f"--model {' --model '.join(SUPPORTED_MODELS)}). "
+            f"Supported: {', '.join(SUPPORTED_MODELS)}."
+        ),
     )
     parser.add_argument(
         "--preprocessing", default=DEFAULT_PREPROCESSING_CONFIG,
@@ -367,9 +460,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--checkpoint", default=None,
-        help="Optional checkpoint used to initialize model weights.",
+        help="Optional checkpoint used to initialize model weights "
+             "(applied to every model in a sweep).",
     )
-    parser.add_argument("--output-dir", default=None)
+    parser.add_argument(
+        "--sweep-checkpoints", default=None,
+        help=(
+            "Root directory searched per-model for a best.pt to initialize "
+            "from (e.g. results/training/figshare). With --models ... this "
+            "fine-tunes every model from its own checkpoint without needing "
+            "to list them by hand."
+        ),
+    )
+    parser.add_argument(
+        "--output-dir", default=None,
+        help="Output root (default: results/training). Each model gets "
+             "<output-dir>/<dataset>/<arch>/.",
+    )
     parser.add_argument("--device", default=None)
     parser.add_argument("--seed", type=int, default=42)
 
@@ -405,33 +512,41 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.hpo and not args.search_space:
         print("ERROR: --search-space is required with --hpo")
         return 1
+    if not args.model:
+        print("ERROR: pass at least one --model (e.g. --model swin_tiny).")
+        return 1
+    if args.hpo and len(args.model) > 1:
+        print("ERROR: --hpo supports a single --model.")
+        return 1
 
-    model_short = Path(args.model).stem
-    dataset_name = Path(args.dataset_dir).name
-    output_dir = args.output_dir or os.path.join(
-        "results", "training", dataset_name, model_short
-    )
     preproc_config = load_config(args.preprocessing)
     training_config = _build_training_config(args)
 
     if args.hpo:
         run_hpo(
             dataset_dir=args.dataset_dir,
-            model_name=args.model,
+            model_name=args.model[0],
             preproc_config=preproc_config,
             base_training_config=training_config,
             search_space_path=args.search_space,
-            output_dir=output_dir,
+            output_dir=args.output_dir or os.path.join(
+                "results", "hpo", Path(args.dataset_dir).name, args.model[0],
+            ),
             checkpoint=args.checkpoint,
             n_trials=args.n_trials,
             study_name=args.study_name,
             device=args.device,
             seed=args.seed,
         )
-    else:
+    elif len(args.model) == 1:
+        # Single-model fast path.
+        output_dir = args.output_dir or os.path.join(
+            "results", "training",
+            Path(args.dataset_dir).name, Path(args.model[0]).stem,
+        )
         metrics = run_training(
             dataset_dir=args.dataset_dir,
-            model_name=args.model,
+            model_name=args.model[0],
             preproc_config=preproc_config,
             training_config=training_config,
             output_dir=output_dir,
@@ -439,6 +554,19 @@ def main(argv: Optional[List[str]] = None) -> int:
             device=args.device,
         )
         print(json.dumps(metrics, indent=2, default=str))
+    else:
+        # Multi-model sweep.
+        run_sweep(
+            dataset_dir=args.dataset_dir,
+            model_names=args.model,
+            preproc_config=preproc_config,
+            training_config=training_config,
+            output_root=args.output_dir or os.path.join("results", "training"),
+            checkpoint=args.checkpoint,
+            sweep_checkpoints=args.sweep_checkpoints,
+            device=args.device,
+            seed=args.seed,
+        )
     return 0
 
 
