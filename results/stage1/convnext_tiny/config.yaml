@@ -1,0 +1,71 @@
+dataset_dir: data/preprocessed/figshare
+model:
+  name: convnext_tiny
+  timm_name: convnext_tiny
+  input_size: 224
+  pretrained: true
+  num_classes: 2
+  freeze_fraction: 0.6
+  head:
+    hidden_dim: 256
+    dropout: 0.5
+preprocessing:
+  name: default
+  steps:
+    resize: true
+    padding: none
+    pad_value: 0
+    clahe:
+      enabled: true
+      clip_limit: 2.0
+      tile_size:
+      - 8
+      - 8
+    gaussian:
+      enabled: false
+      sigma: 1.0
+    srad:
+      enabled: true
+      iterations: 20
+      kappa: 30
+      gamma: 0.1
+    to_grayscale:
+      enabled: false
+      method: mean
+      broadcast_3ch: true
+    zscore_normalize:
+      enabled: true
+  augmentation:
+    rotation: 15
+    horizontal_flip: true
+    scale: 0.1
+    jpeg_compression:
+      enabled: true
+      p: 0.3
+      q_low: 50
+      q_high: 95
+    light_blur:
+      enabled: true
+      p: 0.2
+      sigma_low: 0.1
+      sigma_high: 1.5
+training:
+  lr: 0.0001
+  weight_decay: 0.01
+  batch_size: 32
+  sampler: weighted
+  max_epochs: 100
+  early_stopping_patience: 20
+  warmup_epochs: 2
+  freeze_epochs: 0
+  ema: true
+  ema_decay: 0.999
+  bf16: true
+  channels_last: true
+  compile: false
+  grad_clip_norm: 1.0
+  save_rng_state: true
+  num_workers: 4
+  dropout: 0.5
+  freeze_fraction: 0.6
+checkpoint: null

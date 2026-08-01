@@ -151,3 +151,21 @@ def test_compute_all_metrics_handles_single_class():
     assert m["test_auc_roc"] == 0.5
     # Specificity well-defined (all TNs)
     assert m["test_specificity"] == 1.0
+
+
+def test_compute_all_metrics_single_class_with_bootstrap():
+    """Regression: bootstrap_auc_ci returns NaN on single-class data;
+    compute_all_metrics must NOT propagate that NaN to test_auc_roc."""
+    labels = np.zeros(50, dtype=int)
+    preds = np.zeros(50, dtype=int)
+    probs = np.full(50, 0.3)
+    m = compute_all_metrics(
+        labels, preds, probs, compute_bootstrap_ci=True, n_bootstrap=50,
+    )
+    assert m["test_auc_roc"] == 0.5, (
+        f"expected 0.5 fallback, got {m['test_auc_roc']!r}"
+    )
+    # CI is also degenerate → NaN is acceptable here, but the headline
+    # point estimate must be the inline fallback.
+    assert np.isnan(m["test_auc_roc_ci_low"])
+    assert np.isnan(m["test_auc_roc_ci_high"])

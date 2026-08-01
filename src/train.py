@@ -11,23 +11,40 @@ checkpoint-initialized training. It expects a fully preprocessed dataset::
 
 Examples::
 
-    # Train from ImageNet initialization (e.g. Figshare)
+    # Train one model from ImageNet initialization (e.g. Figshare)
     python -m src.train \
         --dataset-dir data/preprocessed/figshare \
-        --model swin_tiny
+        --model swin_tiny \
+        --output-dir results/figshare
 
-    # Initialize from a checkpoint (e.g. PCOSGen after Figshare)
+    # Train several models at once — saved under the names you passed
+    python -m src.train \
+        --dataset-dir data/preprocessed/figshare \
+        --model swin_tiny vit_base convnext_tiny densenet169 efficientnet_b0 \
+        --output-dir results/figshare
+
+    # Initialize one model from a checkpoint (fine-tune)
     python -m src.train \
         --dataset-dir data/preprocessed/pcosgen \
         --model swin_tiny \
-        --checkpoint results/figshare/swin_tiny/best.pt
+        --checkpoint results/figshare/swin_tiny/best.pt \
+        --output-dir results/pcosgen
 
-    # Dataset-specific Optuna study
+    # Fine-tune all models in one invocation. Each model loads its own
+    # matching best.pt from --model-dir.
+    python -m src.train \
+        --dataset-dir data/preprocessed/pcosgen \
+        --model swin_tiny vit_base convnext_tiny densenet169 efficientnet_b0 \
+        --model-dir results/figshare \
+        --output-dir results/pcosgen
+
+    # Dataset-specific Optuna study (single model only)
     python -m src.train \
         --dataset-dir data/preprocessed/figshare \
         --model swin_tiny \
         --hpo --search-space configs/search_space/figshare.yaml \
-        --n-trials 30
+        --n-trials 30 \
+        --output-dir results/hpo/figshare/swin_tiny
 
 The presence of ``--checkpoint`` does not activate a separate fine-tuning
 pipeline; it simply changes model initialization. All runs use the same
@@ -78,7 +95,6 @@ DEFAULT_TRAINING_CONFIG: Dict[str, object] = {
     "channels_last": True,
     "compile": False,
     "grad_clip_norm": 1.0,
-    "keep_last_n": 3,
     "save_rng_state": True,
 }
 
@@ -164,6 +180,11 @@ def run_training(
 
     The dataset must already contain train/val/test PNG splits. No split
     logic exists here or in the dataloader.
+
+    ``model_name`` is the model identifier (or YAML path) used to
+    resolve the architecture config; the output directory is decided
+    by the caller, so this function does not derive it from
+    ``model_name``.
     """
     device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     model_cfg = _load_model_config(model_name)
@@ -346,80 +367,86 @@ def _build_training_config(args) -> dict:
             "num_workers": args.num_workers,
             "dropout": args.dropout,
             "freeze_fraction": args.freeze_fraction,
+            "warmup_epochs": args.warmup_epochs,
+            "freeze_epochs": args.freeze_epochs,
+            "ema": args.ema,
+            "ema_decay": args.ema_decay,
+            "bf16": args.bf16,
+            "channels_last": args.channels_last,
+            "compile": args.compile,
         }
     )
     return cfg
 
 
-def _resolve_sweep_checkpoint(
-    sweep_root: str, model_short: str, dataset_name: str,
-) -> Optional[str]:
-    """Find ``<sweep_root>/<dataset_name>/<model_short>/best.pt`` if it exists.
+def _resolve_model_dir_checkpoint(model_dir: str, model_name: str) -> Optional[str]:
+    """Find ``<model_dir>/<model_name>/best.pt`` if it exists.
 
-    Used when the user wants to fine-tune all models in one invocation:
-    every model's checkpoint is expected to live in the matching
-    ``<dataset>/<arch>/`` subdirectory under the sweep root.
+    Used for fine-tune-all mode: each model loads its own checkpoint
+    from a shared root.
     """
-    candidates = [
-        os.path.join(sweep_root, dataset_name, model_short, "best.pt"),
-        os.path.join(sweep_root, model_short, "best.pt"),
-        os.path.join(sweep_root, f"{model_short}.pt"),
-    ]
-    for c in candidates:
-        if os.path.isfile(c):
-            return c
-    return None
+    candidate = os.path.join(model_dir, model_name, "best.pt")
+    return candidate if os.path.isfile(candidate) else None
 
 
-def run_sweep(
+def _output_name(model_name: str) -> str:
+    """Resolve the on-disk directory name for a model spec.
+
+    Bare names like ``swin_tiny`` are used verbatim. YAML paths
+    collapse to the file stem so the output tree stays clean.
+    """
+    if model_name.endswith((".yaml", ".yml")):
+        return Path(model_name).stem
+    return model_name
+
+
+def run_multi(
     *,
     dataset_dir: str,
     model_names: List[str],
     preproc_config: dict,
     training_config: dict,
-    output_root: Optional[str],
+    output_dir: str,
     checkpoint: Optional[str] = None,
-    sweep_checkpoints: Optional[str] = None,
+    model_dir: Optional[str] = None,
     device: Optional[str] = None,
     seed: int = 42,
 ) -> Dict[str, dict]:
     """Train or fine-tune multiple models sequentially.
+
+    Each model is saved under ``<output_dir>/<model_name>/``. The
+    ``model_name`` is used verbatim — that's also the directory the
+    caller passes to ``--model-dir`` later for fine-tune-all mode.
 
     Args:
         dataset_dir: Preprocessed PNG dataset root.
         model_names: List of model short names (or YAML paths).
         preproc_config: Loaded preprocessing config.
         training_config: Built training config dict.
-        output_root: Where to write results. Each model gets
-            ``<output_root>/<dataset>/<model>/``. If ``None``,
-            defaults to ``results/training``.
-        checkpoint: Single checkpoint path applied to every model.
-        sweep_checkpoints: Root directory searched per-model for a
-            ``best.pt`` to initialize from. Ignored if ``checkpoint``
-            is also given.
+        output_dir: Root under which each model gets its own folder.
+        checkpoint: Single checkpoint applied to every model.
+        model_dir: Root searched per-model for a ``best.pt``
+            (``<model_dir>/<model_name>/best.pt``). Ignored if
+            ``checkpoint`` is also given.
         device: Device string.
         seed: Seed (reset per model for determinism).
 
     Returns:
         Mapping ``model_name → metrics dict``.
     """
-    dataset_name = Path(dataset_dir).name
-    output_root = output_root or os.path.join("results", "training")
     results: Dict[str, dict] = {}
     for name in model_names:
-        short = Path(name).stem
         ckpt = checkpoint
-        if ckpt is None and sweep_checkpoints is not None:
-            ckpt = _resolve_sweep_checkpoint(
-                sweep_checkpoints, short, dataset_name,
-            )
+        out_name = _output_name(name)
+        if ckpt is None and model_dir is not None:
+            ckpt = _resolve_model_dir_checkpoint(model_dir, out_name)
             if ckpt is not None:
-                print(f"[Sweep] {short}: initializing from {ckpt}")
+                print(f"[Multi] {out_name}: initializing from {ckpt}")
             else:
-                print(f"[Sweep] {short}: no checkpoint under "
-                      f"{sweep_checkpoints!r}, training from scratch")
+                print(f"[Multi] {out_name}: no checkpoint under "
+                      f"{model_dir!r}, training from scratch")
         set_seed(seed)
-        run_dir = os.path.join(output_root, dataset_name, short)
+        run_dir = os.path.join(output_dir, out_name)
         try:
             metrics = run_training(
                 dataset_dir=dataset_dir,
@@ -430,12 +457,12 @@ def run_sweep(
                 checkpoint=ckpt,
                 device=device,
             )
-            results[short] = metrics
+            results[out_name] = metrics
         except Exception as exc:
-            print(f"[Sweep] {short} FAILED: {exc}")
-            results[short] = {"error": str(exc)}
-    print(f"\n[Sweep] Done. {len(results)} models run. "
-          f"Output root: {output_root}")
+            print(f"[Multi] {out_name} FAILED: {exc}")
+            results[out_name] = {"error": str(exc)}
+    print(f"\n[Multi] Done. {len(results)} models run. "
+          f"Output root: {output_dir}")
     return results
 
 
@@ -446,11 +473,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Preprocessed dataset root with train/val/test (e.g. data/preprocessed/figshare).",
     )
     parser.add_argument(
-        "--model", action="append", default=[],
+        "--model", nargs="+", required=True,
         help=(
-            "Model name or YAML path. May be repeated to train/finetune "
-            "multiple models in one invocation (e.g. "
-            f"--model {' --model '.join(SUPPORTED_MODELS)}). "
+            "One or more model names or YAML paths (space-separated). "
+            "Each model is saved under <output-dir>/<name>/. "
             f"Supported: {', '.join(SUPPORTED_MODELS)}."
         ),
     )
@@ -461,21 +487,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--checkpoint", default=None,
         help="Optional checkpoint used to initialize model weights "
-             "(applied to every model in a sweep).",
+             "(applied to every model when listing several).",
     )
     parser.add_argument(
-        "--sweep-checkpoints", default=None,
+        "--model-dir", default=None,
         help=(
-            "Root directory searched per-model for a best.pt to initialize "
-            "from (e.g. results/training/figshare). With --models ... this "
-            "fine-tunes every model from its own checkpoint without needing "
-            "to list them by hand."
+            "Root directory searched per-model for a best.pt to "
+            "initialize from (e.g. results/figshare). With several "
+            "--model names this fine-tunes every model from its own "
+            "matching checkpoint."
         ),
     )
     parser.add_argument(
         "--output-dir", default=None,
-        help="Output root (default: results/training). Each model gets "
-             "<output-dir>/<dataset>/<arch>/.",
+        help="Output root. Each model gets <output-dir>/<name>/. "
+             "Default: results/<dataset_name>.",
     )
     parser.add_argument("--device", default=None)
     parser.add_argument("--seed", type=int, default=42)
@@ -491,6 +517,39 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sampler", choices=("weighted", "shuffle", "none"), default="weighted"
     )
+
+    # ---- Training-loop behavior flags (Phase 3 throughput opts) ----
+    parser.add_argument(
+        "--ema", dest="ema", action="store_true", default=True,
+        help="Maintain EMA shadow weights and evaluate test set with them (default: True).",
+    )
+    parser.add_argument(
+        "--no-ema", dest="ema", action="store_false",
+        help="Disable EMA shadow weights.",
+    )
+    parser.add_argument("--ema-decay", type=float, default=0.999)
+    parser.add_argument(
+        "--bf16", dest="bf16", action="store_true", default=True,
+        help="Use bfloat16 autocast on CUDA (default: True).",
+    )
+    parser.add_argument(
+        "--fp16", dest="bf16", action="store_false",
+        help="Use float16 autocast instead of bfloat16.",
+    )
+    parser.add_argument(
+        "--channels-last", dest="channels_last", action="store_true", default=True,
+        help="Use channels_last memory format on CUDA (default: True).",
+    )
+    parser.add_argument(
+        "--no-channels-last", dest="channels_last", action="store_false",
+        help="Disable channels_last memory format.",
+    )
+    parser.add_argument(
+        "--compile", action="store_true", default=False,
+        help="Wrap the model in torch.compile (max-autotune).",
+    )
+    parser.add_argument("--warmup-epochs", type=int, default=2)
+    parser.add_argument("--freeze-epochs", type=int, default=0)
 
     parser.add_argument("--hpo", action="store_true", help="Run Optuna HPO.")
     parser.add_argument(
@@ -512,13 +571,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.hpo and not args.search_space:
         print("ERROR: --search-space is required with --hpo")
         return 1
-    if not args.model:
-        print("ERROR: pass at least one --model (e.g. --model swin_tiny).")
-        return 1
     if args.hpo and len(args.model) > 1:
         print("ERROR: --hpo supports a single --model.")
         return 1
 
+    dataset_name = Path(args.dataset_dir).name
+    output_dir = args.output_dir or os.path.join("results", dataset_name)
     preproc_config = load_config(args.preprocessing)
     training_config = _build_training_config(args)
 
@@ -529,9 +587,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             preproc_config=preproc_config,
             base_training_config=training_config,
             search_space_path=args.search_space,
-            output_dir=args.output_dir or os.path.join(
-                "results", "hpo", Path(args.dataset_dir).name, args.model[0],
-            ),
+            output_dir=os.path.join(output_dir, args.model[0]),
             checkpoint=args.checkpoint,
             n_trials=args.n_trials,
             study_name=args.study_name,
@@ -540,30 +596,28 @@ def main(argv: Optional[List[str]] = None) -> int:
         )
     elif len(args.model) == 1:
         # Single-model fast path.
-        output_dir = args.output_dir or os.path.join(
-            "results", "training",
-            Path(args.dataset_dir).name, Path(args.model[0]).stem,
-        )
+        out_name = _output_name(args.model[0])
+        run_dir = os.path.join(output_dir, out_name)
         metrics = run_training(
             dataset_dir=args.dataset_dir,
             model_name=args.model[0],
             preproc_config=preproc_config,
             training_config=training_config,
-            output_dir=output_dir,
+            output_dir=run_dir,
             checkpoint=args.checkpoint,
             device=args.device,
         )
         print(json.dumps(metrics, indent=2, default=str))
     else:
-        # Multi-model sweep.
-        run_sweep(
+        # Multi-model: train or fine-tune each model sequentially.
+        run_multi(
             dataset_dir=args.dataset_dir,
             model_names=args.model,
             preproc_config=preproc_config,
             training_config=training_config,
-            output_root=args.output_dir or os.path.join("results", "training"),
+            output_dir=output_dir,
             checkpoint=args.checkpoint,
-            sweep_checkpoints=args.sweep_checkpoints,
+            model_dir=args.model_dir,
             device=args.device,
             seed=args.seed,
         )

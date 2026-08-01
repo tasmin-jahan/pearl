@@ -736,13 +736,15 @@ probabilities are averaged across models before metric computation.
 \subsection{SWA on each finalist}
 
 SWA (\cite{izmailov:2018}) averages model weights over a window of
-training epochs to find flatter minima. After training, we average
-the rolling-window checkpoints with \texttt{run\_swa\_on\_recent}:
+training epochs to find flatter minima. The trainer no longer keeps
+rolling-window per-epoch checkpoints, so SWA is applied across the
+\emph{best.pt} of independent training runs (e.g.\ cross-dataset
+fine-tunes) using \texttt{average\_checkpoints}:
 
 \begin{lstlisting}[language=Python, basicstyle=\ttfamily\small]
-from src.training.swa import run_swa_on_recent
+from src.training.swa import average_checkpoints
 model = build_model(model_config)
-run_swa_on_recent(model, checkpoint_path, keep_last_n=5)
+average_checkpoints(model, [ckpt_run1, ckpt_run2, ckpt_run3])
 \end{lstlisting}
 
 Floating-point parameters are element-wise averaged; integer buffers

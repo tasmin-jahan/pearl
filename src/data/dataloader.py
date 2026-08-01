@@ -257,6 +257,53 @@ def make_weighted_sampler(labels: Sequence[int]) -> WeightedRandomSampler:
     )
 
 
+def build_test_loader(
+    dataset_dir: str,
+    preproc_config: Optional[dict] = None,
+    *,
+    batch_size: int = 32,
+    num_workers: int = 2,
+    pin_memory: bool = True,
+) -> DataLoader:
+    """Build a single test DataLoader from a preprocessed split.
+
+    Unlike :func:`build_dataloaders`, this only requires a ``test/``
+    split (the loader never augments or samples). ``dataset_dir`` may be
+    either the dataset root (``data/preprocessed/<dataset>``) or the
+    split directory itself (``data/preprocessed/<dataset>/test``);
+    auto-detected by looking for an ``images/`` child.
+
+    Use this for inference and evaluation paths, where train/val are
+    unnecessary.
+    """
+    preproc_config = preproc_config or {}
+    zscore_cfg = (preproc_config.get("steps", {}) or {}).get(
+        "zscore_normalize", {}
+    ) or {}
+    zscore = bool(zscore_cfg.get("enabled", True))
+
+    # If the caller pointed at a split root (e.g. .../pcosgen/test),
+    # resolve the dataset root one level up so _read_split's path
+    # expectations line up.
+    if (Path(dataset_dir) / "images").is_dir() and (
+        Path(dataset_dir) / "label.csv"
+    ).is_file():
+        dataset_dir = str(Path(dataset_dir).parent)
+
+    test_samples = _read_split(dataset_dir, "test")
+    test_ds = PCOSDataset(test_samples, augment=False, zscore=zscore)
+
+    loader = DataLoader(
+        test_ds,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+    )
+    print(f"[Data] test_loader dataset={dataset_dir} n={len(test_ds)}")
+    return loader
+
+
 def build_dataloaders(
     dataset_dir: str,
     preproc_config: Optional[dict] = None,

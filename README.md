@@ -101,61 +101,61 @@ wipes the output by default (`--no-clean` to append).
 python -m src.train \
     --dataset-dir data/preprocessed/figshare \
     --model swin_tiny \
-    --output-dir results/training/figshare/swin_tiny
+    --output-dir results/figshare
 
 # Optional: load a checkpoint to initialize weights (fine-tune mode)
 python -m src.train \
-    --dataset-dir data/preprocessed/figshare \
+    --dataset-dir data/preprocessed/pcosgen \
     --model swin_tiny \
-    --checkpoint results/training/figshare/swin_tiny/best.pt \
-    --output-dir results/training/figshare/swin_tiny
+    --checkpoint results/figshare/swin_tiny/best.pt \
+    --output-dir results/pcosgen
 ```
 
 `--checkpoint` initializes the model weights from `best.pt` but
 **does not** carve a frozen fine-tune mode — the same trainer loop
 runs in both cases. The full hyperparameter surface is exposed via
 flags (`--lr`, `--weight-decay`, `--dropout`, `--freeze-fraction`,
-`--epochs`, `--patience`, `--batch-size`, `--sampler`).
+`--epochs`, `--patience`, `--batch-size`, `--sampler`,
+`--warmup-epochs`, `--freeze-epochs`). Throughput toggles are
+`--ema/--no-ema`, `--bf16/--fp16`, `--channels-last/--no-channels-last`,
+and `--compile`.
 
 ### 5a. Train (multiple models in one invocation)
 
-`--model` is repeatable. Pass each architecture once and they run
-sequentially, each in its own `<output-dir>/<dataset>/<arch>/`
-subdirectory. All other hyperparameters are shared.
+`--model` accepts a space-separated list. Pass each architecture
+once and they run sequentially, each in its own
+`<output-dir>/<name>/` subdirectory (using the same name you passed
+on the CLI). All other hyperparameters are shared.
 
 ```bash
-# Train all five supported architectures from scratch
 python -m src.train \
     --dataset-dir data/preprocessed/figshare \
-    --model swin_tiny --model vit_base --model convnext_tiny \
-    --model densenet169 --model efficientnet_b0
+    --model swin_tiny vit_base convnext_tiny densenet169 efficientnet_b0 \
+    --output-dir results/figshare
 ```
+
+Saves to `results/figshare/swin_tiny/`, `results/figshare/vit_base/`,
+etc. — one `best.pt` per model.
 
 ### 5b. Fine-tune multiple models at once
 
-Two ways:
+The same shape, with `--model-dir` pointing at the foundation-pass
+output. For each `--model <name>`, `src.train` initializes from
+`<model-dir>/<name>/best.pt` if it exists; otherwise it trains that
+model from scratch (with a printed warning). This is the typical
+cross-dataset fine-tune workflow: foundation pass already wrote one
+`best.pt` per architecture under `results/<dataset>/<arch>/`.
 
 ```bash
-# (a) Same checkpoint for every model (rare)
 python -m src.train \
     --dataset-dir data/preprocessed/pcosgen \
-    --model swin_tiny --model vit_base \
-    --checkpoint results/training/figshare/swin_tiny/best.pt
-
-# (b) Each model loads its own matching checkpoint — typical fine-tune
-#     workflow: foundation pass already produced best.pt under
-#     results/training/<dataset>/<arch>/ for every arch.
-python -m src.train \
-    --dataset-dir data/preprocessed/pcosgen \
-    --model swin_tiny --model vit_base --model convnext_tiny \
-    --model densenet169 --model efficientnet_b0 \
-    --sweep-checkpoints results/training/figshare
+    --model swin_tiny vit_base convnext_tiny densenet169 efficientnet_b0 \
+    --model-dir results/figshare \
+    --output-dir results/pcosgen
 ```
 
-With `--sweep-checkpoints <root>`, each model looks for
-`<root>/<dataset>/<model>/best.pt`. If a model's checkpoint is
-missing under the root, that model falls back to training from
-scratch (with a printed warning) — so partial sweeps are safe.
+Saves to `results/pcosgen/<name>/`. To use a single checkpoint for
+all models instead, pass `--checkpoint <path>` (no `--model-dir`).
 
 ### 6. Train (Optuna HPO)
 
@@ -174,17 +174,36 @@ Search spaces are dataset-specific (`figshare.yaml`, `pcosgen.yaml`).
 Optuna uses TPE + MedianPruner, reports `val_auc` per trial, and
 respects Trainer early stopping.
 
-### 7. Evaluate a single checkpoint
+### 7. Evaluate a checkpoint (single or multi-model)
+
+The same CLI covers in-distribution eval, fine-tune eval, and zero-shot
+transfer eval. The CLI is dataset-agnostic — it never inspects which
+dataset the checkpoint was trained on.
 
 ```bash
+# Single model (writes <checkpoint-dir>/metrics.json)
 python -m src.evaluation.run_evaluate \
     --checkpoint-dir results/figshare/swin_tiny \
     --test-dataset-dir data/preprocessed/figshare \
     --model-config configs/model/swin_tiny.yaml
+
+# Multi-model zero-shot eval: every <arch>/best.pt under --model-dir
+# is loaded and scored against --test-dataset-dir. Each architecture's
+# YAML is resolved from configs/model/<arch>.yaml automatically.
+python -m src.evaluation.run_evaluate \
+    --model-dir results/stage1 \
+    --test-dataset-dir data/preprocessed/pcosgen \
+    --model-configs-dir configs/model \
+    --output-dir results/zero_shot_pcosgen
 ```
 
-Writes one JSON of metrics to `<checkpoint-dir>/metrics.json` by
-default. Call once per model — no cross-checkpoint aggregation.
+`--test-dataset-dir` accepts either the dataset root
+(`data/preprocessed/pcosgen`) or the test split directory directly
+(`data/preprocessed/pcosgen/test`). Multi-model mode writes
+`<output-dir>/<arch>/metrics.json` for each architecture and an
+aggregated `<output-dir>/all_metrics.json`. Per-arch failures don't
+abort the run — they're recorded as `{"error": "..."}` in the
+aggregate so partial sweeps still produce usable output.
 
 ### 8. Calibration analysis (single + ensemble)
 
@@ -268,20 +287,31 @@ The three figure-producing scripts live under
 
 ```
 results/
-├── training/<dataset>/<arch>/   # best.pt, metrics.json, training_curves.png, config.yaml
-├── hpo/<dataset>/<arch>/        # best params, study.db, top-trial checkpoint
+├── <dataset>/<arch>/          # training (one folder per model, default output root)
+│   ├── best.pt                # the trained checkpoint (only one retained)
+│   ├── config.yaml
+│   ├── epoch_log.csv          # per-epoch metric log
+│   ├── final_metrics.json
+│   ├── training_curve.png
+│   ├── roc_curve.png          # test-set ROC curve
+│   ├── pr_curve.png           # test-set PR curve
+│   └── confusion_matrix.png   # test-set confusion matrix
+├── hpo/<dataset>/<arch>/      # Optuna (single-model) study.db + best_params.yaml
 ├── calibration/<dataset>/[<arch>|ensemble]/
 ├── uncertainty/<dataset>/[<arch>|ensemble]/
 ├── xai/<dataset>/<arch>/
-└── eval/<dataset>_<arch>.json   # written by src.evaluation.run_evaluate
+└── eval/<dataset>_<arch>.json # written by src.evaluation.run_evaluate
 ```
 
-Downstream CLIs (`run_calibration`, `run_uncertainty`, `xai.run_xai`,
-`evaluation.run_evaluate`) take a checkpoint path or `--checkpoint-dir`
-and an `--out-dir` separately, so you can keep the training tree under
-`results/training/<dataset>/<arch>/` and write the analysis outputs
-anywhere (e.g. `results/calibration/<dataset>/<arch>/`). The two
-roots are independent.
+Training only writes one checkpoint (`best.pt`). Per-epoch rolling
+checkpoints and raw `.npz` curve arrays are no longer persisted on disk;
+the downstream CLIs (calibration, uncertainty, XAI) re-run inference
+from `best.pt` as needed.
+
+`src.train` defaults `--output-dir` to `results/<dataset>/` and
+writes one `<arch>/` subfolder per `--model` (matching the name you
+passed). Downstream CLIs take their own `--out-dir`, so the
+training root and the analysis root are independent.
 
 Configs live in `configs/`:
 

@@ -229,15 +229,13 @@ def make_arch_dir(results_dir: str, prep: str, arch: str) -> str:
 
         results/checkpoints/<prep>/<arch>/
             best.pt
-            best_e<N>.pt                # rolling-window checkpoints
             config.yaml
             epoch_log.csv
             final_metrics.json
             training_curve.png
-            roc_curve.{png,npz}
-            pr_curve.{png,npz}
+            roc_curve.png
+            pr_curve.png
             confusion_matrix.png
-            test_predictions.npz
             external_validation/        # populated by evaluate_external.py
                 pcosgen.json
                 pcosgen.csv

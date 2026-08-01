@@ -8,9 +8,12 @@ Training loop with AdamW + cosine annealing + early stopping, v3 features:
     channels_last, pin_memory + non_blocking transfers
   - EMA shadow weights (Phase 3.1)
   - RNG + dataloader state resumption (Phase 3.3)
-  - Rolling-window checkpoint retention (Phase 3.4)
   - Self-contained checkpoint with arch + class_names (Phase 3.2)
   - Rich UI: per-epoch progress bar + colored epoch summary panel
+
+The trainer writes only ``best.pt``; no rolling-window checkpoints are
+retained. Each per-epoch checkpoint can easily weigh hundreds of MB, so
+keeping every recent epoch fills disk for no paper-grade benefit.
 """
 
 import copy
@@ -247,9 +250,6 @@ class Trainer:
                 self.ema = EMA(self.model, decay=self.ema_decay)
             except Exception:
                 self.ema = None
-
-        # ---- Rolling-window checkpoints (Phase 3.4) ----
-        self.keep_last_n = config.get("keep_last_n", 3)
 
         # ---- RNG state (Phase 3.3) — restored on resume ----
         self._save_rng = config.get("save_rng_state", True)
@@ -554,9 +554,6 @@ class Trainer:
             else:
                 self.epochs_without_improvement += 1
 
-            # Always retain the last N checkpoints (rolling window)
-            self._save_recent(epoch, val_auc)
-
             # ---- Scheduler step (only after warmup) ----
             if epoch > self.warmup_epochs:
                 self.scheduler.step()
@@ -642,7 +639,7 @@ class Trainer:
         grid.add_column(justify="left")
 
         key_metrics = [
-            ("test_auc",      "AUC-ROC"),
+            ("test_auc_roc",  "AUC-ROC"),
             ("test_accuracy", "Accuracy"),
             ("test_f1",       "F1"),
             ("test_mcc",      "MCC"),
@@ -678,11 +675,11 @@ class Trainer:
         )
 
     def _save_curve_artifacts(self, labels, probs, preds):
-        """Save ROC curve, PR curve, and confusion matrix PNGs + raw arrays.
+        """Save ROC curve, PR curve, and confusion matrix PNGs.
 
-        Produces:
-          - roc_curve.png, pr_curve.png, confusion_matrix.png
-          - roc_curve.npz, pr_curve.npz (raw arrays for later re-plotting)
+        Produces only PNGs. Raw arrays are not persisted on disk: the
+        downstream CLIs (calibration, uncertainty, XAI) re-run inference
+        from ``best.pt`` rather than relying on cached predictions.
         """
         import matplotlib
         matplotlib.use("Agg")
@@ -709,11 +706,6 @@ class Trainer:
         fig.tight_layout()
         fig.savefig(os.path.join(run_dir, "roc_curve.png"), dpi=150, bbox_inches="tight")
         plt.close(fig)
-        np.savez(
-            os.path.join(run_dir, "roc_curve.npz"),
-            fpr=curves["fpr"], tpr=curves["tpr"],
-            thresholds=curves["roc_thresholds"],
-        )
 
         # ---- PR curve ----
         fig, ax = plt.subplots(figsize=(6, 6))
@@ -728,11 +720,6 @@ class Trainer:
         fig.tight_layout()
         fig.savefig(os.path.join(run_dir, "pr_curve.png"), dpi=150, bbox_inches="tight")
         plt.close(fig)
-        np.savez(
-            os.path.join(run_dir, "pr_curve.npz"),
-            precision=curves["precision"], recall=curves["recall"],
-            thresholds=curves["pr_thresholds"],
-        )
 
         # ---- Confusion matrix ----
         cm = sk_cm(labels, preds)
@@ -756,14 +743,6 @@ class Trainer:
             dpi=150, bbox_inches="tight",
         )
         plt.close(fig)
-
-        # Save raw arrays for downstream analysis (DeLong, calibration)
-        np.savez(
-            os.path.join(run_dir, "test_predictions.npz"),
-            labels=labels.astype(int),
-            probs=probs.astype(float),
-            preds=preds.astype(int),
-        )
 
         if not self.silent:
             print(f"[Trainer] Saved curve artifacts to {run_dir}")
@@ -969,32 +948,6 @@ class Trainer:
             self._unwrap_compiled(), self.optimizer, epoch, val_auc,
             self.checkpoint_path, ema=self.ema,
         )
-
-    def _save_recent(self, epoch: int, val_auc: float):
-        """Save a numbered checkpoint in the same dir; prune to keep_last_n."""
-        base_dir = os.path.dirname(self.checkpoint_path)
-        recent_path = os.path.join(
-            base_dir, f"{os.path.splitext(os.path.basename(self.checkpoint_path))[0]}_e{epoch}.pt",
-        )
-        save_checkpoint(
-            self._unwrap_compiled(), self.optimizer, epoch, val_auc,
-            recent_path, ema=self.ema,
-        )
-        self._prune_old_checkpoints(base_dir)
-
-    def _prune_old_checkpoints(self, base_dir: str):
-        """Keep only the keep_last_n most recent _e*.pt files."""
-        prefix = os.path.splitext(os.path.basename(self.checkpoint_path))[0]
-        files = []
-        for f in os.listdir(base_dir):
-            if f.startswith(prefix + "_e") and f.endswith(".pt"):
-                files.append(os.path.join(base_dir, f))
-        files.sort(key=lambda p: os.path.getmtime(p))
-        for old in files[:-self.keep_last_n]:
-            try:
-                os.remove(old)
-            except OSError:
-                pass
 
     # ------------------------------------------------------------------
     # Resume support (Phase 3.3)

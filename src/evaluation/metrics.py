@@ -365,6 +365,14 @@ def compute_all_metrics(
         auc_pt, auc_lo, auc_hi = bootstrap_auc_ci(
             labels, probabilities, n_boot=n_bootstrap,
         )
+        # ``bootstrap_auc_ci`` returns NaN when the test set is
+        # degenerate (only one class present). Fall back to the inline
+        # AUC (already guarded against single-class via the 0.5 fallback
+        # above) so downstream consumers never see a NaN headline metric.
+        if not np.isfinite(auc_pt):
+            auc_pt = float(auc)
+            auc_lo = float("nan")
+            auc_hi = float("nan")
     else:
         auc_pt, auc_lo, auc_hi = auc, float("nan"), float("nan")
 

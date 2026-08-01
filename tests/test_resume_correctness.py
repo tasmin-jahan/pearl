@@ -107,7 +107,6 @@ def test_resume_state_restores_rng(tmp_dir):
         "channels_last": False,
         "compile": False,
         "ema": False,
-        "keep_last_n": 3,
         "save_rng_state": True,
     }
     ckpt_path = os.path.join(tmp_dir, "best.pt")
@@ -150,7 +149,7 @@ def test_divergence_guard_raises(tmp_dir):
         "max_epochs": 1, "early_stopping_patience": 100,
         "warmup_epochs": 0, "freeze_epochs": 0,
         "bf16": False, "channels_last": False,
-        "compile": False, "ema": False, "keep_last_n": 3,
+        "compile": False, "ema": False,
     }
     trainer = Trainer(
         model=model, train_loader=loader, val_loader=loader, test_loader=loader,

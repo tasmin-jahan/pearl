@@ -1,14 +1,21 @@
 """
-Stochastic Weight Averaging (SWA) helper for Phase 6.4.
+Stochastic Weight Averaging (SWA) helper.
 
-SWA averages model weights over a window of training epochs to find
-flatter minima, often yielding a 0.5–1% AUC improvement at no extra
-training cost. Implemented as a post-training step that loads each
-fold's recent checkpoints and averages their parameters.
+SWA averages model weights across multiple checkpoints to find flatter
+minima, often yielding a 0.5–1% AUC improvement at no extra training
+cost. Implemented as a post-training step that loads each checkpoint
+and averages its parameters.
 
 This is complementary to EMA (which the trainer maintains in-shadow
 during training) — both are cheap, and they operate on different
-statistics.
+statistics. EMA is on by default and is what the trainer uses at test
+time; SWA is opt-in and lives here for callers that want to average
+multiple independent training runs.
+
+Note: the trainer no longer keeps rolling-window per-epoch checkpoints,
+so ``run_swa_on_recent`` cannot discover them automatically. Callers
+should pass explicit checkpoint paths via :func:`average_checkpoints`
+instead.
 """
 
 import glob
@@ -69,7 +76,9 @@ def run_swa_on_recent(
     """Average the most recent ``keep_last_n`` numbered checkpoints.
 
     Looks for files matching ``{checkpoint_path_stem}_e*.pt`` in
-    the same directory as ``checkpoint_path``.
+    the same directory as ``checkpoint_path``. With the current trainer
+    this glob is usually empty (the trainer only writes ``best.pt``);
+    prefer :func:`average_checkpoints` with explicit paths for new code.
 
     Args:
         model: Model to update with averaged weights.
