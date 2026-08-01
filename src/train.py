@@ -478,10 +478,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Preprocessed dataset root with train/val/test (e.g. data/preprocessed/figshare).",
     )
     parser.add_argument(
-        "--model", nargs="+", required=True,
+        "--model", nargs="*", default=None,
         help=(
             "One or more model names or YAML paths (space-separated). "
             "Each model is saved under <output-dir>/<name>/. "
+            "Optional when --model-dir is given: every <arch>/best.pt "
+            "under --model-dir is auto-discovered and fine-tuned. "
             f"Supported: {', '.join(SUPPORTED_MODELS)}."
         ),
     )
@@ -575,6 +577,36 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     set_seed(args.seed)
 
+    # Auto-discover architectures from --model-dir when --model is omitted.
+    # Each <arch>/best.pt under --model-dir is treated as a fine-tune
+    # source. This is the common fine-tune-all workflow: you ran a
+    # foundation pass to results/<dataset>/<arch>/best.pt, and now you
+    # want every model to load its own matching checkpoint and train
+    # on the target dataset.
+    if not args.model:
+        if args.model_dir:
+            if not os.path.isdir(args.model_dir):
+                print(f"ERROR: --model-dir {args.model_dir} is not a directory")
+                return 1
+            discovered = sorted(
+                p.name for p in Path(args.model_dir).iterdir()
+                if p.is_dir() and (p / "best.pt").is_file()
+            )
+            if not discovered:
+                print(
+                    f"ERROR: --model-dir {args.model_dir} has no "
+                    "<arch>/best.pt subdirectories."
+                )
+                return 1
+            args.model = discovered
+            print(f"[Auto-discover] Using architectures: {args.model}")
+        else:
+            print(
+                "ERROR: --model is required unless --model-dir is given "
+                "(which auto-discovers every <arch>/best.pt under it)."
+            )
+            return 1
+
     if not os.path.isdir(args.dataset_dir):
         print(f"ERROR: --dataset-dir {args.dataset_dir} is not a directory")
         return 1
@@ -586,7 +618,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 1
 
     dataset_name = Path(args.dataset_dir).name
-    output_dir = args.output_dir or os.path.join("results", dataset_name)
+    output_dir = (args.output_dir or os.path.join("results", dataset_name)).rstrip("/").rstrip(os.sep)
     preproc_config = load_config(args.preprocessing)
     training_config = _build_training_config(args)
 
