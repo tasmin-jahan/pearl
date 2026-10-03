@@ -57,7 +57,7 @@ todo.md
 Thumbs.db
 
 # --- Project specific ---
-no_upload/
+no-upload/
 hybridseednet/
 data_external/
 context.md
