@@ -49,9 +49,36 @@ pearl/
 └── requirements.txt
 ```
 
-## Usage
+## Quickstart: End-to-End Pipeline Runners
 
-All entrypoints are Python modules, run from the repo root. Every CLI
+For immediate reproduction of the complete PEARL pipeline, 9 numbered runner scripts are provided in `scripts/`:
+
+| Step | Script | Purpose |
+|------|--------|---------|
+| **01** | [`scripts/01_setup_env.py`](scripts/01_setup_env.py) | Verifies Python, PyTorch/CUDA, GPU VRAM, installs dependencies, tests forward pass. |
+| **02** | [`scripts/02_prepare_data.py`](scripts/02_prepare_data.py) | Unpacks `data/*.zip`, runs deduplication, stratified splits, and materializes preprocessed PNGs. |
+| **03** | [`scripts/03_train_models.py`](scripts/03_train_models.py) | Trains individual models (`--model <name>`) or all 5 architectures sequentially (`--model all`). |
+| **04** | [`scripts/04_evaluate_models.py`](scripts/04_evaluate_models.py) | Evaluates trained models on in-distribution or external test cohorts (AUC, F1, MCC, Brier). |
+| **05** | [`scripts/05_calibration_analysis.py`](scripts/05_calibration_analysis.py) | Fits temperature scaling calibration on validation set, evaluates ECE on test set. |
+| **06** | [`scripts/06_create_ensemble.py`](scripts/06_create_ensemble.py) | Aggregates individual models into a calibrated, probability-averaged ensemble. |
+| **07** | [`scripts/07_uncertainty_analysis.py`](scripts/07_uncertainty_analysis.py) | Runs MC-Dropout (50 passes), computes predictive entropy and risk-coverage trade-offs. |
+| **08** | [`scripts/08_xai_analysis.py`](scripts/08_xai_analysis.py) | Generates Grad-CAM, LRP, and SHAP visual explanations across confidence quadrants. |
+| **09** | [`scripts/09_generate_figures.py`](scripts/09_generate_figures.py) | Generates all paper, thesis, and analysis figures and LaTeX tables in `docs/`. |
+
+### Cloud GPU Execution (Kaggle / Google Colab)
+
+A self-contained, turnkey Jupyter notebook is located at:
+[`notebooks/pearl_kaggle_colab.ipynb`](notebooks/pearl_kaggle_colab.ipynb)
+
+- **Optimized for Nvidia T4 (16GB VRAM)**: Automatically configures FP16 Tensor Cores (`--fp16`) and batch sizes (32/64).
+- **One-Click Execution**: Step-by-step cells run each stage cleanly with formatted progress outputs.
+- **Automated Checkpoint Packaging**: Compresses `results/` into `pearl_results.zip` and `docs/` into `pearl_figures_and_tables.zip` with browser download prompts (`files.download` on Colab, working output on Kaggle).
+
+---
+
+## Detailed CLI Usage
+
+All entrypoints are also available as standalone Python modules, run from the repo root. Every CLI
 that touches preprocessed data expects a `--dataset-dir` of the form
 `data/preprocessed/<dataset>/` (canonical layout produced by
 `run_preprocessing`).

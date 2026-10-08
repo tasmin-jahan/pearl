@@ -130,13 +130,12 @@ def test_missing_split_raises_with_clear_error():
 
 
 def test_dataset_returns_tensor_and_label():
-    samples = [("/tmp/never.png", 1)]
-    ds = PCOSDataset(samples, zscore=False)
-    # Manually inject a HxWxC uint8 png in /tmp for the test.
     import tempfile
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-        _write_png(f.name, 200)
-        samples = [(f.name, 1)]
+        tmp_name = f.name
+    try:
+        _write_png(tmp_name, 200)
+        samples = [(tmp_name, 1)]
         ds = PCOSDataset(samples, zscore=False)
         x, label = ds[0]
         assert x.shape == (3, 64, 64)
@@ -145,11 +144,20 @@ def test_dataset_returns_tensor_and_label():
         # Without zscore, values should be in [0, 1].
         assert x.max() <= 1.0 + 1e-6
         assert x.min() >= 0.0
+    finally:
+        if os.path.exists(tmp_name):
+            try:
+                os.remove(tmp_name)
+            except OSError:
+                pass
 
 
 def test_weighted_sampler_with_imbalanced_labels():
+    torch.manual_seed(42)
     labels = [0] * 80 + [1] * 20
     sampler = make_weighted_sampler(labels)
-    drawn = [labels[int(i)] for i in list(sampler)[:2000]]
+    drawn = []
+    for _ in range(20):
+        drawn.extend([labels[int(i)] for i in sampler])
     frac = sum(drawn) / len(drawn)
     assert 0.40 < frac < 0.60

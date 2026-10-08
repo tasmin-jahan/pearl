@@ -13,7 +13,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torchcam.methods import GradCAM
+try:
+    from torchcam.methods import GradCAM
+except ImportError:
+    GradCAM = None
 
 
 def generate_gradcam(
@@ -23,6 +26,9 @@ def generate_gradcam(
     device: str = "cuda",
 ) -> np.ndarray:
     """Generate a Grad-CAM heatmap for a single image.
+
+    Supports standard CNN architectures via TorchCAM, Vision Transformers
+    (ViT / Swin) via intermediate block attribution, and graceful saliency fallback.
 
     Args:
         model: Trained model.
@@ -37,36 +43,115 @@ def generate_gradcam(
     model.to(device)
     image_tensor = image_tensor.to(device)
 
-    # Find the last conv layer in the backbone
-    target_layer = _find_last_conv_layer(model)
+    # 1. Try TorchCAM if a trainable Conv2d layer is found
+    trainable_conv = _find_last_trainable_conv_layer(model)
+    if trainable_conv is not None and GradCAM is not None:
+        try:
+            cam_extractor = GradCAM(model, target_layer=[trainable_conv])
+            logits = model(image_tensor)
+            if target_class is None:
+                target_class = logits.argmax(dim=1).item()
+            activation_map = cam_extractor(target_class, logits)
+            heatmap = activation_map[0].squeeze().cpu().numpy()
+            h, w = image_tensor.shape[2], image_tensor.shape[3]
+            heatmap = cv2.resize(heatmap, (w, h))
+            heatmap = (heatmap - heatmap.min()) / (heatmap.max() - heatmap.min() + 1e-8)
+            cam_extractor.remove_hooks()
+            return heatmap
+        except Exception:
+            pass
 
-    cam_extractor = GradCAM(model, target_layer=[target_layer])
+    # 2. Vision Transformer / Swin block hook
+    hook_handle = None
+    activations = []
+    gradients = []
+    target_module = None
 
-    # Forward pass
-    logits = model(image_tensor)
-    if target_class is None:
-        target_class = logits.argmax(dim=1).item()
+    if hasattr(model, "backbone"):
+        if hasattr(model.backbone, "blocks") and len(model.backbone.blocks) > 0:
+            target_module = model.backbone.blocks[-1]
+        elif hasattr(model.backbone, "layers") and len(model.backbone.layers) > 0:
+            target_module = model.backbone.layers[-1]
 
-    # Generate CAM
-    activation_map = cam_extractor(target_class, logits)
+    if target_module is not None:
+        try:
+            def _fwd_hook(mod, inp, out):
+                target_tensor = inp[0] if isinstance(inp, tuple) else inp
+                activations.append(target_tensor)
+                target_tensor.register_hook(lambda g: gradients.append(g))
 
-    # Get the heatmap
-    heatmap = activation_map[0].squeeze().cpu().numpy()
+            hook_handle = target_module.register_forward_hook(_fwd_hook)
 
-    # Resize to input size
-    h, w = image_tensor.shape[2], image_tensor.shape[3]
-    heatmap = cv2.resize(heatmap, (w, h))
+            with torch.enable_grad():
+                img = image_tensor.clone().detach().requires_grad_(True)
+                logits = model(img)
+                if target_class is None:
+                    target_class = logits.argmax(dim=-1).item()
+                score = logits[0, target_class]
+                score.backward()
 
-    # Normalize to [0, 1]
-    heatmap = (heatmap - heatmap.min()) / (heatmap.max() - heatmap.min() + 1e-8)
+            hook_handle.remove()
 
-    cam_extractor.remove_hooks()
+            if activations and gradients:
+                act = activations[0].detach()
+                grad = gradients[0].detach()
 
-    return heatmap
+                if act.dim() == 3:  # (B, N, C) e.g. ViT
+                    if act.shape[1] > 1:
+                        n_tokens = act.shape[1]
+                        side = int(np.sqrt(n_tokens))
+                        if side * side == n_tokens:
+                            act_p, grad_p = act[0], grad[0]
+                        else:
+                            # Account for CLS token
+                            act_p, grad_p = act[0, 1:], grad[0, 1:]
+                            side = int(np.sqrt(act_p.shape[0]))
+                        weights = grad_p.mean(dim=0, keepdim=True)
+                        cam = F.relu((act_p * weights).sum(dim=-1)).view(side, side).cpu().numpy()
+                        h, w = image_tensor.shape[2], image_tensor.shape[3]
+                        cam = cv2.resize(cam, (w, h))
+                        return (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
+                elif act.dim() == 4:  # (B, H, W, C) e.g. Swin
+                    act_s = act[0].permute(2, 0, 1)  # (C, H, W)
+                    grad_s = grad[0].permute(2, 0, 1)
+                    weights = grad_s.mean(dim=(1, 2), keepdim=True)
+                    cam = F.relu((weights * act_s).sum(dim=0)).cpu().numpy()
+                    h, w = image_tensor.shape[2], image_tensor.shape[3]
+                    cam = cv2.resize(cam, (w, h))
+                    return (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
+        except Exception:
+            if hook_handle is not None:
+                hook_handle.remove()
+
+    # 3. Input Gradient Saliency Fallback
+    with torch.enable_grad():
+        img = image_tensor.clone().detach().requires_grad_(True)
+        logits = model(img)
+        if target_class is None:
+            target_class = logits.argmax(dim=-1).item()
+        score = logits[0, target_class]
+        score.backward()
+        grad = img.grad[0].abs().mean(dim=0).cpu().numpy()
+        h, w = image_tensor.shape[2], image_tensor.shape[3]
+        cam = cv2.resize(grad, (w, h))
+        return (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
+
+
+def _find_last_trainable_conv_layer(model) -> str | None:
+    """Find the name of the last trainable Conv2d layer in the model."""
+    last_conv_name = None
+    for name, module in model.named_modules():
+        if isinstance(module, torch.nn.Conv2d):
+            if any(p.requires_grad for p in module.parameters()):
+                last_conv_name = name
+    return last_conv_name
 
 
 def _find_last_conv_layer(model) -> str:
-    """Find the name of the last Conv2d layer in the backbone."""
+    """Find the name of the last Conv2d layer in the backbone (backward compatibility)."""
+    trainable = _find_last_trainable_conv_layer(model)
+    if trainable is not None:
+        return trainable
     last_conv_name = None
     for name, module in model.named_modules():
         if isinstance(module, torch.nn.Conv2d):

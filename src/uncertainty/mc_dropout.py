@@ -34,7 +34,12 @@ def mc_dropout_inference(
           - entropy: (N,) predictive entropy in nats
     """
     model.to(device)
-    model.train()  # keeps dropout active
+    model.eval()
+    # Activate only dropout layers so that normalization layers (BatchNorm, LayerNorm)
+    # keep using their frozen running statistics instead of corrupting them
+    for m in model.modules():
+        if isinstance(m, (torch.nn.Dropout, torch.nn.Dropout1d, torch.nn.Dropout2d, torch.nn.Dropout3d)):
+            m.train()
 
     all_probs = []  # will be (n_passes, N, 2)
 
@@ -59,4 +64,5 @@ def mc_dropout_inference(
     # Predictive entropy: H = -sum(p * log(p))
     entropy = -(mean_probs * torch.log(mean_probs + 1e-8)).sum(dim=1)  # (N,)
 
+    model.eval()
     return mean_probs, entropy

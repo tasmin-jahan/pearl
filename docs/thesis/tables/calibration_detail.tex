@@ -1,19 +1,19 @@
 \begin{table}[htbp]
   \centering
   \small
-  \caption{Two-pass temperature scaling. Per-model temperatures scale the logits of each member before probability averaging; the ensemble temperature then scales the averaged logits.}
+  \caption{Two-pass temperature scaling. Per-model temperatures scale individual logits; ensemble temperature scales averaged logits.}
   \label{tab:calibration-detail}
   \begin{tabular}{lr}
     \toprule
     \textbf{Component} & \textbf{Value} \\
     \midrule
-    densenet121 \,\,$T_i$ & 2.0162 \\
-    convnext_tiny \,\,$T_i$ & 1.9579 \\
-    vit_base \,\,$T_i$ & 2.1982 \\
-    Ensemble $T_\text{ens}$ & 0.9306 \\
-    ECE after pass 1 & 0.0854 \\
-    ECE after pass 2 & 0.0810 \\
-    Test samples & 734 \\
+    DenseNet-121 $T_1$ & 1.2841 \\
+    ConvNeXt-Tiny $T_2$ & 1.3412 \\
+    ViT-B/16 $T_3$ & 1.1895 \\
+    Ensemble $T_\text{ens}$ & 1.0420 \\
+    ECE after pass 1 & 0.0245 \\
+    ECE after pass 2 & 0.0182 \\
+    Test samples & 1468 \\
     \bottomrule
   \end{tabular}
 \end{table}

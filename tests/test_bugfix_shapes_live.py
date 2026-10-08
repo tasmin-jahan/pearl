@@ -70,6 +70,7 @@ class TestEndToEndModelBuild:
 
         cfg_path = f"configs/model/{model_name}.yaml"
         cfg = yaml.safe_load(open(cfg_path))
+        cfg["pretrained"] = False
         from src.model.builder import build_model
 
         model = build_model(cfg)

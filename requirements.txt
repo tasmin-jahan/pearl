@@ -30,7 +30,7 @@ scipy==1.17.1
 numpy==2.4.4
 
 # --- XAI ---
-# torchcam installed separately above (--no-deps workaround)
+torchcam>=0.4.1
 shap==0.52.0
 zennit==1.0.0
 

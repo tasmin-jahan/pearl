@@ -38,8 +38,8 @@ class TestMakeArchDir:
             b = make_arch_dir(tmp, "gauss", "eff")
             assert a != b
             # Same arch name in different prep directories.
-            assert a.endswith("/checkpoints/srad/eff")
-            assert b.endswith("/checkpoints/gauss/eff")
+            assert a.replace("\\", "/").endswith("/checkpoints/srad/eff")
+            assert b.replace("\\", "/").endswith("/checkpoints/gauss/eff")
             assert os.path.isdir(a)
             assert os.path.isdir(b)
 
@@ -57,13 +57,13 @@ class TestExternalValidationPath:
 
     def test_default_dataset_and_ext(self):
         path = external_validation_path("/tmp/x/eff_b0")
-        assert path == "/tmp/x/eff_b0/external_validation/pcosgen.json"
+        assert path.replace("\\", "/") == "/tmp/x/eff_b0/external_validation/pcosgen.json"
 
     def test_custom_dataset(self):
         path = external_validation_path(
             "/tmp/x/eff_b0", dataset="Mendeley", ext="csv",
         )
-        assert path == "/tmp/x/eff_b0/external_validation/Mendeley.csv"
+        assert path.replace("\\", "/") == "/tmp/x/eff_b0/external_validation/Mendeley.csv"
 
     def test_under_make_arch_dir(self):
         """The two helpers compose — path is a real, creatable location."""

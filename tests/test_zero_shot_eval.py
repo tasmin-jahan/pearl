@@ -177,7 +177,7 @@ def test_run_evaluate_multi_model_discovers_archs(tmp_dir, capsys, monkeypatch):
         m = summary[arch]
         assert "test_auc_roc" in m, m
         assert "test_accuracy" in m
-        assert m["checkpoint"].endswith(f"{arch}/best.pt")
+        assert m["checkpoint"].replace("\\", "/").endswith(f"{arch}/best.pt")
         assert (output_dir / arch / "metrics.json").is_file()
 
 
