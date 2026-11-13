@@ -1,0 +1,12 @@
+{
+  "model": "convnext_tiny",
+  "dataset": "data/preprocessed/pcosgen",
+  "checkpoint": "results/gauss/pcosgen_ft/convnext_tiny/best.pt",
+  "ece_before": 0.0815,
+  "ece_after": 0.0593,
+  "optimal_temperature": 1.9589,
+  "val_nll_before": 0.4277,
+  "val_nll_after": 0.3213,
+  "n_bins": 15,
+  "n_test_samples": 1468
+}

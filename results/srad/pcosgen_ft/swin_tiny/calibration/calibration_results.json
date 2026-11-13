@@ -1,0 +1,12 @@
+{
+  "model": "swin_tiny",
+  "dataset": "data/preprocessed/pcosgen",
+  "checkpoint": "results/srad/pcosgen_ft/swin_tiny/best.pt",
+  "ece_before": 0.091,
+  "ece_after": 0.071,
+  "optimal_temperature": 1.8942,
+  "val_nll_before": 0.4641,
+  "val_nll_after": 0.3624,
+  "n_bins": 15,
+  "n_test_samples": 1468
+}

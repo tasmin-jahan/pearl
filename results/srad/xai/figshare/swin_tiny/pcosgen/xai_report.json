@@ -1,0 +1,91 @@
+{
+  "title": "swin_tiny | trained: figshare | srad",
+  "model": "swin_tiny",
+  "checkpoint": "/content/drive/MyDrive/thesis/models/srad/figshare/swin_tiny/best.pt",
+  "dataset": "pcosgen",
+  "n_test": 1468,
+  "test_accuracy_mc_mean": 0.3937,
+  "mc_passes": 20,
+  "faithfulness": {
+    "n_images": 100,
+    "cam_deletion_auc": 0.6085,
+    "cam_deletion_auc_std": 0.1799,
+    "cam_insertion_auc": 0.8788,
+    "cam_insertion_auc_std": 0.0496,
+    "rand_deletion_auc": 0.7579,
+    "rand_deletion_auc_std": 0.1361,
+    "rand_insertion_auc": 0.7617,
+    "rand_insertion_auc_std": 0.1306,
+    "deletion_gain": 0.1494,
+    "insertion_gain": 0.1171,
+    "deletion_win_rate_vs_random": 0.86,
+    "insertion_win_rate_vs_random": 0.99
+  },
+  "selected_samples": [
+    {
+      "sample_id": 72,
+      "true_label": 0,
+      "predicted_label": 0,
+      "correct": true,
+      "entropy_nats": 0.0954,
+      "split_group": "confident_correct"
+    },
+    {
+      "sample_id": 1412,
+      "true_label": 0,
+      "predicted_label": 0,
+      "correct": true,
+      "entropy_nats": 0.0996,
+      "split_group": "confident_correct"
+    },
+    {
+      "sample_id": 1102,
+      "true_label": 0,
+      "predicted_label": 1,
+      "correct": false,
+      "entropy_nats": 0.1969,
+      "split_group": "overconfident_error"
+    },
+    {
+      "sample_id": 1275,
+      "true_label": 0,
+      "predicted_label": 1,
+      "correct": false,
+      "entropy_nats": 0.1966,
+      "split_group": "overconfident_error"
+    },
+    {
+      "sample_id": 1377,
+      "true_label": 0,
+      "predicted_label": 0,
+      "correct": true,
+      "entropy_nats": 0.6595,
+      "split_group": "uncertain_correct"
+    },
+    {
+      "sample_id": 1343,
+      "true_label": 0,
+      "predicted_label": 0,
+      "correct": true,
+      "entropy_nats": 0.655,
+      "split_group": "uncertain_correct"
+    },
+    {
+      "sample_id": 1201,
+      "true_label": 0,
+      "predicted_label": 1,
+      "correct": false,
+      "entropy_nats": 0.6928,
+      "split_group": "uncertain_wrong"
+    },
+    {
+      "sample_id": 66,
+      "true_label": 0,
+      "predicted_label": 1,
+      "correct": false,
+      "entropy_nats": 0.6863,
+      "split_group": "uncertain_wrong"
+    }
+  ],
+  "seconds": 208.8
+}

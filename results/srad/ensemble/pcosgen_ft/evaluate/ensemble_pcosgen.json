@@ -1,0 +1,59 @@
+{
+  "n_samples": 1468,
+  "n_positive": 549,
+  "n_negative": 919,
+  "threshold_used": 0.5,
+  "test_accuracy": 0.8903,
+  "test_precision": 0.8212,
+  "test_recall": 0.9035,
+  "test_specificity": 0.8825,
+  "test_npv": 0.9387,
+  "test_f1": 0.8604,
+  "test_mcc": 0.7728,
+  "test_fpr": 0.1175,
+  "test_fnr": 0.0965,
+  "test_auc_roc": 0.9343,
+  "test_auc_roc_ci_low": 0.921,
+  "test_auc_roc_ci_high": 0.9467,
+  "test_auc_pr": 0.8157,
+  "test_nll": 0.2763,
+  "test_brier": 0.0817,
+  "test_tp": 496,
+  "test_fp": 108,
+  "test_tn": 811,
+  "test_fn": 53,
+  "youden_threshold": 0.3233,
+  "youden_accuracy": 0.8917,
+  "youden_sensitivity": 0.9854,
+  "youden_specificity": 0.8357,
+  "youden_f1": 0.8719,
+  "op_threshold_at_sens": 0.4133,
+  "op_target_sensitivity": 0.95,
+  "op_specificity_at_target": 0.8531,
+  "op_f1_at_target": 0.8657,
+  "ensemble_members": [
+    {
+      "arch": "convnext_tiny",
+      "checkpoint": "results/srad/pcosgen_ft/convnext_tiny/best.pt"
+    },
+    {
+      "arch": "densenet169",
+      "checkpoint": "results/srad/pcosgen_ft/densenet169/best.pt"
+    },
+    {
+      "arch": "efficientnet_b0",
+      "checkpoint": "results/srad/pcosgen_ft/efficientnet_b0/best.pt"
+    },
+    {
+      "arch": "swin_tiny",
+      "checkpoint": "results/srad/pcosgen_ft/swin_tiny/best.pt"
+    },
+    {
+      "arch": "vit_base",
+      "checkpoint": "results/srad/pcosgen_ft/vit_base/best.pt"
+    }
+  ],
+  "test_dataset_dir": "data/preprocessed/pcosgen/test",
+  "preprocessing_config": "configs/preprocessing.yaml",
+  "aggregation": "probability_mean"
+}

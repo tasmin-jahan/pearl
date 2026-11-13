@@ -1,0 +1,15 @@
+{
+  "archs": [
+    "convnext_tiny",
+    "densenet169",
+    "efficientnet_b0",
+    "swin_tiny",
+    "vit_base"
+  ],
+  "ensemble": true,
+  "mc_passes": 50,
+  "n_test": 1468,
+  "mean_entropy": 0.2396,
+  "median_entropy": 0.2414,
+  "accuracy_full": 0.8883
+}

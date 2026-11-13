@@ -1,0 +1,12 @@
+{
+  "model": "convnext_tiny",
+  "dataset": "data/preprocessed/pcosgen",
+  "checkpoint": "results/srad/pcosgen_ft/convnext_tiny/best.pt",
+  "ece_before": 0.0844,
+  "ece_after": 0.0473,
+  "optimal_temperature": 1.7871,
+  "val_nll_before": 0.3778,
+  "val_nll_after": 0.3017,
+  "n_bins": 15,
+  "n_test_samples": 1468
+}

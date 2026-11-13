@@ -1,0 +1,12 @@
+{
+  "model": "vit_base",
+  "dataset": "data/preprocessed/pcosgen",
+  "checkpoint": "results/srad/pcosgen_ft/vit_base/best.pt",
+  "ece_before": 0.1346,
+  "ece_after": 0.1473,
+  "optimal_temperature": 1.4639,
+  "val_nll_before": 0.4847,
+  "val_nll_after": 0.4552,
+  "n_bins": 15,
+  "n_test_samples": 1468
+}

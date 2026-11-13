@@ -1,0 +1,12 @@
+{
+  "model": "densenet169",
+  "dataset": "data/preprocessed/figshare",
+  "checkpoint": "results/gauss/figshare/densenet169/best.pt",
+  "ece_before": 0.0549,
+  "ece_after": 0.0335,
+  "optimal_temperature": 0.7584,
+  "val_nll_before": 0.1123,
+  "val_nll_after": 0.1016,
+  "n_bins": 15,
+  "n_test_samples": 554
+}

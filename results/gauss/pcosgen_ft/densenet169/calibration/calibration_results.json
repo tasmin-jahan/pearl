@@ -1,0 +1,12 @@
+{
+  "model": "densenet169",
+  "dataset": "data/preprocessed/pcosgen",
+  "checkpoint": "results/gauss/pcosgen_ft/densenet169/best.pt",
+  "ece_before": 0.1196,
+  "ece_after": 0.1287,
+  "optimal_temperature": 1.9969,
+  "val_nll_before": 0.3944,
+  "val_nll_after": 0.3154,
+  "n_bins": 15,
+  "n_test_samples": 1468
+}

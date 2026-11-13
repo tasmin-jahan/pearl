@@ -1,0 +1,21 @@
+{
+  "archs": [
+    "convnext_tiny",
+    "densenet169",
+    "efficientnet_b0",
+    "swin_tiny",
+    "vit_base"
+  ],
+  "per_model_temperatures": [
+    0.7288,
+    0.6761,
+    1.2276,
+    0.7834,
+    0.5894
+  ],
+  "ensemble_temperature": 0.5556,
+  "ece_after_pass1": 0.0775,
+  "ece_after_pass2": 0.0317,
+  "n_bins": 15,
+  "n_test_samples": 554
+}

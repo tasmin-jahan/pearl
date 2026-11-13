@@ -1,0 +1,9 @@
+exp,tag,test_set,domain,n_models,mean_pairwise_pearson
+gauss,figshare,figshare,in-domain,5,0.1142
+gauss,figshare,pcosgen,cross-domain,5,0.1208
+gauss,pcosgen_ft,figshare,cross-domain,5,-0.0363
+gauss,pcosgen_ft,pcosgen,in-domain,5,-0.0478
+srad,figshare,figshare,in-domain,5,0.1219
+srad,figshare,pcosgen,cross-domain,5,0.0427
+srad,pcosgen_ft,figshare,cross-domain,5,0.1114
+srad,pcosgen_ft,pcosgen,in-domain,5,0.1024

@@ -1,0 +1,6 @@
+coverage_threshold,n_auto_decided,n_referred,accuracy_on_auto,entropy_cutoff
+1.0,554,0,0.9783,0.6906
+0.9,499,55,0.99,0.316
+0.8,444,110,0.991,0.214
+0.7,388,166,0.9923,0.1794
+0.6,333,221,0.997,0.1598

@@ -1,0 +1,11 @@
+{
+  "archs": [
+    "densenet169"
+  ],
+  "ensemble": false,
+  "mc_passes": 50,
+  "n_test": 554,
+  "mean_entropy": 0.1727,
+  "median_entropy": 0.1405,
+  "accuracy_full": 0.9783
+}

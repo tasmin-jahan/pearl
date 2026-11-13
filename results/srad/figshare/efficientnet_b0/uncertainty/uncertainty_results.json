@@ -1,0 +1,11 @@
+{
+  "archs": [
+    "efficientnet_b0"
+  ],
+  "ensemble": false,
+  "mc_passes": 50,
+  "n_test": 554,
+  "mean_entropy": 0.196,
+  "median_entropy": 0.1754,
+  "accuracy_full": 0.9838
+}

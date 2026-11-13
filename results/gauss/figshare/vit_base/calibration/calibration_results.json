@@ -1,0 +1,12 @@
+{
+  "model": "vit_base",
+  "dataset": "data/preprocessed/figshare",
+  "checkpoint": "results/gauss/figshare/vit_base/best.pt",
+  "ece_before": 0.0663,
+  "ece_after": 0.0374,
+  "optimal_temperature": 0.7682,
+  "val_nll_before": 0.1377,
+  "val_nll_after": 0.1268,
+  "n_bins": 15,
+  "n_test_samples": 554
+}

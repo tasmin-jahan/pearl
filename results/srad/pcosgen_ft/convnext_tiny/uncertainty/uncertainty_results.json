@@ -1,0 +1,11 @@
+{
+  "archs": [
+    "convnext_tiny"
+  ],
+  "ensemble": false,
+  "mc_passes": 50,
+  "n_test": 1468,
+  "mean_entropy": 0.1343,
+  "median_entropy": 0.091,
+  "accuracy_full": 0.8828
+}

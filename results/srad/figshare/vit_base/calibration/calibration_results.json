@@ -1,0 +1,12 @@
+{
+  "model": "vit_base",
+  "dataset": "data/preprocessed/figshare",
+  "checkpoint": "results/srad/figshare/vit_base/best.pt",
+  "ece_before": 0.096,
+  "ece_after": 0.0331,
+  "optimal_temperature": 0.5691,
+  "val_nll_before": 0.1624,
+  "val_nll_after": 0.1193,
+  "n_bins": 15,
+  "n_test_samples": 554
+}

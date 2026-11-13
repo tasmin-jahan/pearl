@@ -1,0 +1,12 @@
+{
+  "model": "swin_tiny",
+  "dataset": "data/preprocessed/pcosgen",
+  "checkpoint": "results/gauss/pcosgen_ft/swin_tiny/best.pt",
+  "ece_before": 0.0994,
+  "ece_after": 0.08,
+  "optimal_temperature": 2.1109,
+  "val_nll_before": 0.4943,
+  "val_nll_after": 0.3558,
+  "n_bins": 15,
+  "n_test_samples": 1468
+}

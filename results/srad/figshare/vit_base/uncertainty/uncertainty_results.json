@@ -1,0 +1,11 @@
+{
+  "archs": [
+    "vit_base"
+  ],
+  "ensemble": false,
+  "mc_passes": 50,
+  "n_test": 554,
+  "mean_entropy": 0.3243,
+  "median_entropy": 0.3583,
+  "accuracy_full": 0.9783
+}
