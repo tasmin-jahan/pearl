@@ -65,3 +65,4 @@ context.md
 .puku-cli/
 .pytest_cache/
 collab/
+report/
